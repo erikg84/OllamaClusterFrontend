@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import navigation.NavigationHost
 
+private const val A_MEDIUM_EMPHASIS_ALPHA = 0.6f
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen() {
@@ -59,7 +61,7 @@ fun MainScreen() {
                             onClick = { currentDestination = destination },
                             text = { Text(destination.title) },
                             selectedContentColor = MaterialTheme.colorScheme.onPrimary,
-                            unselectedContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                            unselectedContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = A_MEDIUM_EMPHASIS_ALPHA),
                         )
                     }
                 }

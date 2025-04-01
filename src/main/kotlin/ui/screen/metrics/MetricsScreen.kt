@@ -38,13 +38,25 @@ fun MetricsScreen(viewModel: MetricsViewModel) {
     }
 
     errors?.let { errorMessage ->
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                text = "Error: $errorMessage",
-                color = MaterialTheme.colorScheme.error
-            )
+        if (responseTimeData.isEmpty() &&
+            requestCountData.isEmpty() &&
+            nodePerformance.isEmpty() &&
+            modelPerformance.isEmpty()) {
+
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Error: $errorMessage",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = { viewModel.loadMetrics() }) {
+                        Text("Retry")
+                    }
+                }
+            }
+            return
         }
-        return
     }
 
     Column(

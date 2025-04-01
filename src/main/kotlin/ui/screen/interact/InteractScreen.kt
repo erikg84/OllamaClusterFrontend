@@ -1,6 +1,7 @@
 package ui.screen.interact
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Create
@@ -189,7 +190,7 @@ fun InteractionModeSelector(
             }
         }
 
-        // Stream toggle row
+        // Stream toggle row with "Coming Soon" badge
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -197,29 +198,48 @@ fun InteractionModeSelector(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Stream Responses",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Stream Responses",
+                    style = MaterialTheme.typography.bodyMedium
+                )
 
+                Spacer(modifier = Modifier.width(8.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                ) {
+                    Text(
+                        "Coming Soon",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            // Disabled switch
             Switch(
                 checked = streamResponses,
-                onCheckedChange = { onStreamToggled() },
+                onCheckedChange = { /* onStreamToggled() */ },  // Disable the toggle
+                enabled = false,  // Disabled state
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = MaterialTheme.colorScheme.primary,
                     checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
                     uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    disabledCheckedThumbColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                    disabledCheckedTrackColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                 )
             )
         }
 
         // Description text
         Text(
-            text = if (streamResponses)
-                "Responses will be shown as they are generated"
-            else
-                "Responses will be shown after completion",
+            text = "Streaming responses will be available in a future update",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp)

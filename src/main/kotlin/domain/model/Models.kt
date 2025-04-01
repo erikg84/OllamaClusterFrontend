@@ -56,6 +56,13 @@ data class Model(
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+data class ModelSummaryDto(
+    @JsonProperty("name") val name: String? = null,
+    @JsonProperty("nodeCount") val nodeCount: Int? = null,
+    @JsonProperty("nodes") val nodes: List<String>? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 enum class ModelStatus {
     LOADED, LOADING, UNLOADED;
 
@@ -85,12 +92,16 @@ data class QueueStatus(
     @JsonProperty("completed") val completed: Int? = null
 )
 
+// Add this to your ClusterStatus model or create a separate method to extract this
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ClusterStatus(
     @JsonProperty("totalNodes") val totalNodes: Int? = null,
-    @JsonProperty("onlineNodes") val onlineNodes: Int? = null,
+    @JsonProperty("availableNodes") val onlineNodes: Int? = null,
     @JsonProperty("totalModels") val totalModels: Int? = null,
-    @JsonProperty("loadedModels") val loadedModels: Int? = null
+    @JsonProperty("loadedModels") val loadedModels: Int? = null,
+    @JsonProperty("nodesStatus") val nodesStatus: Map<String, String>? = null,
+    @JsonProperty("nodeQueueSizes") val nodeQueueSizes: Map<String, Int>? = null,
+    @JsonProperty("modelsAvailable") val modelsAvailable: Map<String, List<String>>? = null
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -257,6 +268,24 @@ fun NodeDto.toDomainModel(): Node {
             memory = null
         )
     )
+}
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class NodeModelsResponseDto(
+    @JsonProperty("node") val node: String,
+    @JsonProperty("models") val models: List<String>
+)
+
+fun updateNodesWithModelsLoaded(nodes: List<Node>, clusterStatus: ClusterStatus): List<Node> {
+    return nodes.map { node ->
+        val nodeId = node.id ?: node.name
+        if (nodeId != null) {
+            val modelsForNode = clusterStatus.modelsAvailable?.get(nodeId)
+            node.copy(modelsLoaded = modelsForNode?.size ?: 0)
+        } else {
+            node
+        }
+    }
 }
 
 suspend inline fun <reified T, R> HttpResponse.mapTo(crossinline transform: (T) -> R): R {
