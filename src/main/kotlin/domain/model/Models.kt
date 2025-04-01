@@ -1,7 +1,6 @@
 package domain.model
 
 import com.fasterxml.jackson.annotation.*
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import io.ktor.client.call.*
 import io.ktor.client.statement.*
 
@@ -222,7 +221,7 @@ enum class LogLevel {
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ApiResponse<T>(
-    @JsonProperty("status") val success: Boolean? = null,
+    @JsonProperty("status") val status: String? = null,
     @JsonProperty("message") val message: String? = null,
     @JsonProperty("data") val data: T? = null
 )

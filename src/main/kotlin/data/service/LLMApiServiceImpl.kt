@@ -190,7 +190,7 @@ class LLMApiServiceImpl(private val httpClient: HttpClient) : LLMApiService {
             val response: HttpResponse = httpClient.post(Endpoints.QUEUE_PAUSE)
             if (response.status.isSuccess()) {
                 val apiResponse: ApiResponse<Boolean> = response.body()
-                return apiResponse.success == true
+                return apiResponse.status == "ok"
             } else {
                 logger.error { "Error pausing queue: ${response.status}" }
                 throw Exception("Failed to pause queue: ${response.status}")
@@ -206,7 +206,7 @@ class LLMApiServiceImpl(private val httpClient: HttpClient) : LLMApiService {
             val response: HttpResponse = httpClient.post(Endpoints.QUEUE_RESUME)
             if (response.status.isSuccess()) {
                 val apiResponse: ApiResponse<Boolean> = response.body()
-                return apiResponse.success == true
+                return apiResponse.status == "ok"
             } else {
                 logger.error { "Error resuming queue: ${response.status}" }
                 throw Exception("Failed to resume queue: ${response.status}")
@@ -372,7 +372,7 @@ class LLMApiServiceImpl(private val httpClient: HttpClient) : LLMApiService {
             val response: HttpResponse = httpClient.post(Endpoints.RESET_STATS)
             if (response.status.isSuccess()) {
                 val apiResponse: ApiResponse<Boolean> = response.body()
-                return apiResponse.success == true
+                return apiResponse.status == "ok"
             } else {
                 logger.error { "Error resetting stats: ${response.status}" }
                 throw Exception("Failed to reset stats: ${response.status}")
@@ -406,7 +406,7 @@ class LLMApiServiceImpl(private val httpClient: HttpClient) : LLMApiService {
     private suspend inline fun <reified T> HttpResponse.handleApiResponse(): T? {
         if (this.status.isSuccess()) {
             val apiResponse: ApiResponse<T> = this.body()
-            if (apiResponse.success == true) {
+            if (apiResponse.status == "ok") {
                 return apiResponse.data
             }
         }

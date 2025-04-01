@@ -1,9 +1,7 @@
 package ui.screen.dashboard
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -15,74 +13,92 @@ import viewmodel.DashboardViewModel
 
 @Composable
 fun DashboardScreen(viewModel: DashboardViewModel) {
+    // Observe all key states
+    val isLoading = viewModel.isLoading
+    val nodes by viewModel.nodes.collectAsState()
+    val models by viewModel.models.collectAsState()
+    val queueStatus by viewModel.queueStatus.collectAsState()
+    val responseTimeData by viewModel.responseTimeData.collectAsState()
+    val errors by viewModel.errors.collectAsState(initial = null)
+
     // Refresh dashboard data when the screen is shown
     LaunchedEffect(Unit) {
         viewModel.refresh()
     }
 
-    // Loading state
-    if (viewModel.isLoading) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-        return
-    }
-
-    // Error state
-    val errors by viewModel.errors.collectAsState(initial = null)
-    errors?.let { errorMessage ->
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                text = "Error: $errorMessage",
-                color = MaterialTheme.colorScheme.error
-            )
-        }
-        return
-    }
-
-    // Dashboard content
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Node status section
-        NodeSection(
-            nodes = viewModel.nodes.collectAsState().value,
-            models = viewModel.models.collectAsState().value
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Available models section (left)
-            ModelsSection(
-                models = viewModel.models.collectAsState().value,
-                modifier = Modifier.weight(1f)
-            )
-
-            // Queue status section (right)
-            QueueSection(
-                queueStatus = viewModel.queueStatus.collectAsState().value,
-                responseTimeData = viewModel.responseTimeData.collectAsState().value,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        // LLM Interaction section at the bottom
+    if (isLoading) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
+                .fillMaxSize(),
+            contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "LLM Interaction",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 8.dp)
+            CircularProgressIndicator()
+        }
+    }
+    Scaffold(
+        topBar = {
+            // Optional: Add error banner if there are errors
+            errors?.let { errorMessage ->
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Error: $errorMessage",
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            }
+        }
+    ) { paddingValues ->
+        // Show loading indicator if data is being fetched
+
+
+        // Dashboard content
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Node status section
+            NodeSection(
+                nodes = nodes,
+                models = models
             )
 
-            // Note: In a real app, we would include a simple interaction UI here
-            // but it's simplified in the dashboard view
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Available models section (left)
+                ModelsSection(
+                    models = models,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // Queue status section (right)
+                QueueSection(
+                    queueStatus = queueStatus,
+                    responseTimeData = responseTimeData,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // LLM Interaction section at the bottom
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                Text(
+                    text = "LLM Interaction",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
         }
     }
 }
