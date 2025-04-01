@@ -3,10 +3,15 @@ package data.service
 import domain.model.*
 import io.ktor.client.*
 import io.ktor.client.call.*
+import io.ktor.client.network.sockets.*
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.network.sockets.*
+import io.ktor.network.sockets.SocketTimeoutException
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.timeout
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import util.asLineFlow
@@ -117,11 +122,16 @@ class LLMApiServiceImpl(private val httpClient: HttpClient) : LLMApiService {
     override suspend fun getModelsByNode(nodeId: String): List<Model> {
         try {
             val response: HttpResponse = httpClient.get(Endpoints.modelsByNode(nodeId))
-            if (response.status.isSuccess()) {
-                return response.body()
-            } else {
-                logger.error { "Error fetching models for node $nodeId: ${response.status}" }
-                throw Exception("Failed to fetch models for node $nodeId: ${response.status}")
+            return response.mapTo<NodeModelsResponseDto, List<Model>> { nodeModelsDto ->
+                nodeModelsDto.models.map { modelName ->
+                    Model(
+                        id = modelName,
+                        name = modelName,
+                        node = nodeId,
+                        status = ModelStatus.LOADED,  // Default assumption
+                        details = null  // You don't have details yet
+                    )
+                }
             }
         } catch (e: Exception) {
             logger.error(e) { "Error fetching models for node $nodeId" }
@@ -147,8 +157,28 @@ class LLMApiServiceImpl(private val httpClient: HttpClient) : LLMApiService {
     override suspend fun getAllModels(): List<Model> {
         try {
             val response: HttpResponse = httpClient.get(Endpoints.CLUSTER_MODELS)
-            val models = response.handleApiResponse<List<Model>>()
-            return models ?: emptyList()
+
+            // Parse the API response
+            val apiResponse: ApiResponseDto<List<ModelSummaryDto>> = response.body()
+            if (apiResponse.status == "ok" && apiResponse.data != null) {
+                val modelSummaries = apiResponse.data
+
+                // Create model instances for each node-model combination
+                return modelSummaries.flatMap { summary ->
+                    summary.nodes?.map { nodeName ->
+                        Model(
+                            id = summary.name,
+                            name = summary.name,
+                            node = nodeName,  // Set the node association
+                            status = ModelStatus.LOADED,
+                            details = null
+                        )
+                    } ?: emptyList()
+                }
+            } else {
+                logger.error { "API returned error: ${apiResponse.message}" }
+                throw Exception("API error: ${apiResponse.message}")
+            }
         } catch (e: Exception) {
             logger.error(e) { "Error fetching all models" }
             throw e
@@ -240,36 +270,16 @@ class LLMApiServiceImpl(private val httpClient: HttpClient) : LLMApiService {
     override suspend fun streamChat(request: ChatRequest): Flow<ChatResponse> {
         return flow {
             try {
-                val streamingRequest = request.copy(stream = true)
-                val response: HttpResponse = httpClient.post(Endpoints.CHAT) {
-                    contentType(ContentType.Application.Json)
-                    setBody(streamingRequest)
-                    accept(ContentType.Text.EventStream)
-                }
+                // Modify the request to explicitly set stream to false for now
+                val nonStreamingRequest = request.copy(stream = false)
 
-                if (!response.status.isSuccess()) {
-                    throw Exception("Error in streaming chat request: ${response.status}")
-                }
+                logger.info { "Streaming is not yet supported. Falling back to regular request." }
 
-                // Process the server-sent events
-                response.bodyAsChannel().asLineFlow().collect { chunk ->
-                    val chunkText = chunk.toString()
-                    if (chunkText.isNotBlank() && !chunkText.startsWith("data: [DONE]")) {
-                        try {
-                            // SSE format typically has "data: " prefix
-                            val dataContent = if (chunkText.startsWith("data: ")) {
-                                chunkText.substring(6)
-                            } else {
-                                chunkText
-                            }
+                // Make a regular request
+                val response = chat(nonStreamingRequest)
 
-                            val chatResponse = json.decodeFromString<ChatResponse>(dataContent)
-                            emit(chatResponse)
-                        } catch (e: Exception) {
-                            logger.error(e) { "Error parsing chat stream chunk: $chunkText" }
-                        }
-                    }
-                }
+                // Emit the response as if it was streamed
+                emit(response)
             } catch (e: Exception) {
                 logger.error(e) { "Error in streaming chat request" }
                 throw e
@@ -300,36 +310,16 @@ class LLMApiServiceImpl(private val httpClient: HttpClient) : LLMApiService {
     override suspend fun streamGenerate(request: GenerateRequest): Flow<GenerateResponse> {
         return flow {
             try {
-                val streamingRequest = request.copy(stream = true)
-                val response: HttpResponse = httpClient.post(Endpoints.GENERATE) {
-                    contentType(ContentType.Application.Json)
-                    setBody(streamingRequest)
-                    accept(ContentType.Text.EventStream)
-                }
+                // Modify the request to explicitly set stream to false for now
+                val nonStreamingRequest = request.copy(stream = false)
 
-                if (!response.status.isSuccess()) {
-                    throw Exception("Error in streaming generate request: ${response.status}")
-                }
+                logger.info { "Streaming is not yet supported. Falling back to regular request." }
 
-                // Process the server-sent events
-                response.bodyAsChannel().asLineFlow().collect { chunk ->
-                    val chunkText = chunk.toString()
-                    if (chunkText.isNotBlank() && !chunkText.startsWith("data: [DONE]")) {
-                        try {
-                            // SSE format typically has "data: " prefix
-                            val dataContent = if (chunkText.startsWith("data: ")) {
-                                chunkText.substring(6)
-                            } else {
-                                chunkText
-                            }
+                // Make a regular request
+                val response = generate(nonStreamingRequest)
 
-                            val generateResponse = json.decodeFromString<GenerateResponse>(dataContent)
-                            emit(generateResponse)
-                        } catch (e: Exception) {
-                            logger.error(e) { "Error parsing generate stream chunk: $chunkText" }
-                        }
-                    }
-                }
+                // Emit the response as if it was streamed
+                emit(response)
             } catch (e: Exception) {
                 logger.error(e) { "Error in streaming generate request" }
                 throw e
@@ -339,17 +329,46 @@ class LLMApiServiceImpl(private val httpClient: HttpClient) : LLMApiService {
 
     override suspend fun getMetrics(): MetricsData {
         try {
-            val response: HttpResponse = httpClient.get(Endpoints.METRICS)
+            val response: HttpResponse = httpClient.get(Endpoints.METRICS) {
+                timeout {
+                    requestTimeoutMillis = 15000
+                }
+            }
+
             if (response.status.isSuccess()) {
                 return response.body()
             } else {
                 logger.error { "Error fetching metrics: ${response.status}" }
+
+                // Check for 404 Not Found
+                if (response.status == HttpStatusCode.NotFound) {
+                    logger.warn { "Metrics endpoint not found, returning empty metrics" }
+                    // Return empty metrics instead of throwing
+                    return createEmptyMetrics()
+                }
+
                 throw Exception("Failed to fetch metrics: ${response.status}")
             }
         } catch (e: Exception) {
             logger.error(e) { "Error fetching metrics" }
+
+            // For connection errors, also return empty metrics
+            if (e is ConnectTimeoutException || e is SocketTimeoutException) {
+                logger.warn { "Connection timeout, returning empty metrics" }
+                return createEmptyMetrics()
+            }
+
             throw e
         }
+    }
+
+    private fun createEmptyMetrics(): MetricsData {
+        return MetricsData(
+            responseTimes = emptyMap(),
+            requestCounts = emptyList(),
+            nodePerformance = emptyMap(),
+            modelPerformance = emptyMap()
+        )
     }
 
     override suspend fun getSystemInfo(): SystemInfo {
@@ -405,11 +424,20 @@ class LLMApiServiceImpl(private val httpClient: HttpClient) : LLMApiService {
 
     private suspend inline fun <reified T> HttpResponse.handleApiResponse(): T? {
         if (this.status.isSuccess()) {
-            val apiResponse: ApiResponse<T> = this.body()
-            if (apiResponse.success == true) {
+            val apiResponse: ApiResponseDto<T> = this.body()
+            if (apiResponse.status == "ok") {  // Check for "ok" string
                 return apiResponse.data
             }
         }
         return null
+    }
+
+    private suspend inline fun <reified T, R> HttpResponse.mapTo(crossinline transform: (T) -> R): R {
+        val apiResponse: ApiResponseDto<T> = body()
+        if (apiResponse.status == "ok" && apiResponse.data != null) {
+            return transform(apiResponse.data)
+        } else {
+            throw Exception("API error: ${apiResponse.message}")
+        }
     }
 }

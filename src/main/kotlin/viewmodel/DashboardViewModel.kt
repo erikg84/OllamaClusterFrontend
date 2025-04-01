@@ -144,7 +144,21 @@ class DashboardViewModel(
         try {
             val result = getClusterStatusUseCase()
             _clusterStatus.value = result
-            logger.debug { "Loaded cluster status" }
+
+            // Update nodes with models loaded from cluster status
+            val currentNodes = _nodes.value.toMutableList()
+            result.modelsAvailable?.forEach { (nodeName, modelsList) ->
+                val nodeIndex = currentNodes.indexOfFirst { it.name == nodeName }
+                if (nodeIndex >= 0) {
+                    // Update the node with the count of loaded models
+                    currentNodes[nodeIndex] = currentNodes[nodeIndex].copy(
+                        modelsLoaded = modelsList.size
+                    )
+                }
+            }
+            _nodes.value = currentNodes
+
+            logger.debug { "Loaded cluster status and updated node model counts" }
         } catch (e: Exception) {
             logger.error(e) { "Error loading cluster status" }
             handleError(e)

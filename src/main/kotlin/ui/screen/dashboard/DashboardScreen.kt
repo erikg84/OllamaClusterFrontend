@@ -15,13 +15,22 @@ import viewmodel.DashboardViewModel
 
 @Composable
 fun DashboardScreen(viewModel: DashboardViewModel) {
+    // Collect all state at the top level
+    val isLoading = viewModel.isLoading
+    val errors by viewModel.errors.collectAsState(initial = null)
+    val nodes by viewModel.nodes.collectAsState()
+    val models by viewModel.models.collectAsState()
+    val clusterStatus by viewModel.clusterStatus.collectAsState()
+    val queueStatus by viewModel.queueStatus.collectAsState()
+    val responseTimeData by viewModel.responseTimeData.collectAsState()
+
     // Refresh dashboard data when the screen is shown
     LaunchedEffect(Unit) {
         viewModel.refresh()
     }
 
     // Loading state
-    if (viewModel.isLoading) {
+    if (isLoading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
         }
@@ -29,7 +38,6 @@ fun DashboardScreen(viewModel: DashboardViewModel) {
     }
 
     // Error state
-    val errors by viewModel.errors.collectAsState(initial = null)
     errors?.let { errorMessage ->
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
@@ -47,8 +55,8 @@ fun DashboardScreen(viewModel: DashboardViewModel) {
     ) {
         // Node status section
         NodeSection(
-            nodes = viewModel.nodes.collectAsState().value,
-            models = viewModel.models.collectAsState().value
+            nodes = nodes,
+            models = models
         )
 
         Row(
@@ -57,14 +65,14 @@ fun DashboardScreen(viewModel: DashboardViewModel) {
         ) {
             // Available models section (left)
             ModelsSection(
-                models = viewModel.models.collectAsState().value,
+                models = models,
                 modifier = Modifier.weight(1f)
             )
 
             // Queue status section (right)
             QueueSection(
-                queueStatus = viewModel.queueStatus.collectAsState().value,
-                responseTimeData = viewModel.responseTimeData.collectAsState().value,
+                queueStatus = queueStatus,
+                responseTimeData = responseTimeData,
                 modifier = Modifier.weight(1f)
             )
         }

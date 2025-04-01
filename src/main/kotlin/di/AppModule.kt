@@ -1,6 +1,5 @@
 package di
 
-import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import data.service.LLMApiService
 import data.service.LLMApiServiceImpl
@@ -29,13 +28,16 @@ val networkModule = module {
             install(ContentNegotiation) {
                 jackson {
                     registerModule(KotlinModule.Builder().build())
-                    configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
                 }
             }
+            engine {
+                requestTimeout = 120_000  // Increase to 120 seconds
+                maxConnectionsCount = 10_000
+            }
             install(HttpTimeout) {
-                requestTimeoutMillis = 30000
-                connectTimeoutMillis = 15000
-                socketTimeoutMillis = 60000
+                requestTimeoutMillis = 120_000
+                connectTimeoutMillis = 15_000
+                socketTimeoutMillis = 120_000
             }
             install(Logging) {
                 logger = object : Logger {

@@ -44,7 +44,7 @@ class InteractViewModel(
     private val _interactionMode = MutableStateFlow(InteractionMode.CHAT)
     val interactionMode: StateFlow<InteractionMode> = _interactionMode.asStateFlow()
 
-    private val _streamResponses = MutableStateFlow(true)
+    private val _streamResponses = MutableStateFlow(false)
     val streamResponses: StateFlow<Boolean> = _streamResponses.asStateFlow()
 
     // Chat history
