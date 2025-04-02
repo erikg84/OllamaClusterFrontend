@@ -207,13 +207,7 @@ class InteractViewModel(
             node = _selectedNode.value!!.id,
             model = _selectedModel.value!!.id,
             prompt = _prompt.value,
-            stream = _streamResponses.value,
-            parameters = LLMParameters(
-                temperature = _temperature.value,
-                topP = _topP.value,
-                maxTokens = _maxTokens.value,
-                frequencyPenalty = _frequencyPenalty.value
-            )
+            stream = _streamResponses.value
         )
 
         launchWithLoading {
@@ -253,12 +247,6 @@ class InteractViewModel(
             model = _selectedModel.value!!.id,
             messages = chatMessages.toList(),
             stream = _streamResponses.value,
-            parameters = LLMParameters(
-                temperature = _temperature.value,
-                topP = _topP.value,
-                maxTokens = _maxTokens.value,
-                frequencyPenalty = _frequencyPenalty.value
-            )
         )
 
         viewModelScope.launch {

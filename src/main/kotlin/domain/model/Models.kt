@@ -136,14 +136,6 @@ data class GenerateRequest(
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class LLMParameters(
-    @JsonProperty("temperature") val temperature: Double? = null,
-    @JsonProperty("topP") val topP: Double? = null,
-    @JsonProperty("maxTokens") val maxTokens: Int? = null,
-    @JsonProperty("frequencyPenalty") val frequencyPenalty: Double? = null
-)
-
-@JsonIgnoreProperties(ignoreUnknown = true)
 data class ChatResponse(
     @JsonProperty("message") val message: ChatMessage? = null,
     @JsonProperty("usage") val usage: TokenUsage? = null
