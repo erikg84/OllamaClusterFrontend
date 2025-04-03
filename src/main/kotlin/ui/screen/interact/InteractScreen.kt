@@ -1,15 +1,13 @@
 package ui.screen.interact
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Chat
-import androidx.compose.material.icons.filled.Create
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -22,227 +20,193 @@ fun InteractScreen(viewModel: InteractViewModel) {
         viewModel.loadNodesAndModels()
     }
 
-    // Loading state
-    if (viewModel.isLoading) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-        return
-    }
+    // State for error dialog
+    var showErrorDialog by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
 
-    // Error state
+    // Collect error state
     val errors by viewModel.errors.collectAsState(initial = null)
-    errors?.let { errorMessage ->
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                text = "Error: $errorMessage",
-                color = MaterialTheme.colorScheme.error
-            )
+
+    // Show error dialog when errors are present
+    LaunchedEffect(errors) {
+        errors?.let {
+            errorMessage = it
+            showErrorDialog = true
         }
-        return
     }
 
-    // Interact screen content
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Text(
-            text = "LLM Interaction",
-            style = MaterialTheme.typography.headlineSmall
-        )
-
-        // Node and model selection
-        val selectedNode = viewModel.selectedNode.collectAsState().value
-
-        NodeModelSelector(
-            nodes = viewModel.nodes.collectAsState().value,
-            models = viewModel.models.collectAsState().value.filter {
-                selectedNode?.id == it.node
-            },
-            selectedNode = selectedNode,
-            selectedModel = viewModel.selectedModel.collectAsState().value,
-            onNodeSelected = { viewModel.selectNode(it) },
-            onModelSelected = { viewModel.selectModel(it) },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        // Mode selector (Chat vs Generate) and stream toggle
-        InteractionModeSelector(
-            currentMode = viewModel.interactionMode.collectAsState().value,
-            streamResponses = viewModel.streamResponses.collectAsState().value,
-            onModeSelected = { viewModel.setInteractionMode(it) },
-            onStreamToggled = { viewModel.toggleStreamResponses() }
-        )
-
-        // Parameters section
-        ParametersSection(
-            temperature = viewModel.temperature.collectAsState().value,
-            topP = viewModel.topP.collectAsState().value,
-            maxTokens = viewModel.maxTokens.collectAsState().value,
-            frequencyPenalty = viewModel.frequencyPenalty.collectAsState().value,
-            onParametersChanged = { temp, tp, mt, fp ->
-                viewModel.updateParameters(temp, tp, mt, fp)
-            }
-        )
-
-        Divider()
-
-        // Chat or Prompt section based on the mode
-        val interactionMode = viewModel.interactionMode.collectAsState().value
-        when (interactionMode) {
-            InteractViewModel.InteractionMode.CHAT -> {
-                ChatSection(
-                    messages = viewModel.chatMessages,
-                    isGenerating = viewModel.isGenerating.collectAsState().value,
-                    onMessageSent = { message -> viewModel.addUserMessage(message) },
-                    onClearChat = { viewModel.clearChat() },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            InteractViewModel.InteractionMode.GENERATE -> {
-                PromptSection(
-                    prompt = viewModel.prompt.collectAsState().value,
-                    generatedText = viewModel.generatedText.collectAsState().value,
-                    isGenerating = viewModel.isGenerating.collectAsState().value,
-                    onPromptChanged = { viewModel.setPrompt(it) },
-                    onGenerateClicked = { viewModel.generateText() },
-                    onClearOutput = { viewModel.clearGeneratedText() },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        // Status message
-        Text(
-            text = viewModel.statusMessage.collectAsState().value,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.secondary
-        )
-    }
-}
-
-@Composable
-fun InteractionModeSelector(
-    currentMode: InteractViewModel.InteractionMode,
-    streamResponses: Boolean,
-    onModeSelected: (InteractViewModel.InteractionMode) -> Unit,
-    onStreamToggled: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)
-    ) {
-        // Mode selection row
-        Text(
-            text = "Interaction Mode",
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Chat mode button
-            OutlinedButton(
-                onClick = { onModeSelected(InteractViewModel.InteractionMode.CHAT) },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = if (currentMode == InteractViewModel.InteractionMode.CHAT)
-                        MaterialTheme.colorScheme.primaryContainer
-                    else
-                        MaterialTheme.colorScheme.surface
-                )
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Split screen layout
+        Row(modifier = Modifier.fillMaxSize()) {
+            // Left side - Chat (60% width)
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(0.6f)
+                    .padding(16.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Chat,
-                    contentDescription = "Chat Mode",
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Chat")
-            }
+                val interactionMode = viewModel.interactionMode.collectAsState().value
 
-            // Generate mode button
-            OutlinedButton(
-                onClick = { onModeSelected(InteractViewModel.InteractionMode.GENERATE) },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = if (currentMode == InteractViewModel.InteractionMode.GENERATE)
-                        MaterialTheme.colorScheme.primaryContainer
-                    else
-                        MaterialTheme.colorScheme.surface
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Create,
-                    contentDescription = "Generate Mode",
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Generate")
-            }
-        }
+                when (interactionMode) {
+                    InteractViewModel.InteractionMode.CHAT -> {
+                        ChatSection(
+                            messages = viewModel.chatMessages,
+                            isGenerating = viewModel.isGenerating.collectAsState().value,
+                            onMessageSent = { message -> viewModel.addUserMessage(message) },
+                            onClearChat = { viewModel.clearChat() },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    InteractViewModel.InteractionMode.GENERATE -> {
+                        PromptSection(
+                            prompt = viewModel.prompt.collectAsState().value,
+                            generatedText = viewModel.generatedText.collectAsState().value,
+                            isGenerating = viewModel.isGenerating.collectAsState().value,
+                            onPromptChanged = { viewModel.setPrompt(it) },
+                            onGenerateClicked = { viewModel.generateText() },
+                            onClearOutput = { viewModel.clearGeneratedText() },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
 
-        // Stream toggle row with "Coming Soon" badge
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Stream Responses",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-                Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    shape = RoundedCornerShape(4.dp),
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                ) {
-                    Text(
-                        "Coming Soon",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
+                // Loading overlay for the chat section only
+                if (viewModel.isGenerating.collectAsState().value) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
                 }
             }
 
-            // Disabled switch
-            Switch(
-                checked = streamResponses,
-                onCheckedChange = { /* onStreamToggled() */ },  // Disable the toggle
-                enabled = false,  // Disabled state
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.primary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
-                    uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    disabledCheckedThumbColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                    disabledCheckedTrackColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                )
-            )
+            // Right side - Settings (40% width)
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(0.4f)
+                    .padding(end = 16.dp, top = 16.dp, bottom = 16.dp)
+            ) {
+                // Scrollable container for all settings
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "LLM Interaction",
+                        style = MaterialTheme.typography.headlineSmall
+                    )
+
+                    // Node and model selection
+                    val selectedNode = viewModel.selectedNode.collectAsState().value
+                    NodeModelSelector(
+                        nodes = viewModel.nodes.collectAsState().value,
+                        models = viewModel.models.collectAsState().value.filter {
+                            selectedNode?.id == it.node
+                        },
+                        selectedNode = selectedNode,
+                        selectedModel = viewModel.selectedModel.collectAsState().value,
+                        onNodeSelected = { viewModel.selectNode(it) },
+                        onModelSelected = { viewModel.selectModel(it) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Mode selector (Chat vs Generate) and stream toggle
+                    InteractionModeSelector(
+                        currentMode = viewModel.interactionMode.collectAsState().value,
+                        streamResponses = viewModel.streamResponses.collectAsState().value,
+                        onModeSelected = { viewModel.setInteractionMode(it) },
+                        onStreamToggled = { viewModel.toggleStreamResponses() }
+                    )
+
+                    // Parameters section
+                    ParametersSection(
+                        temperature = viewModel.temperature.collectAsState().value,
+                        topP = viewModel.topP.collectAsState().value,
+                        maxTokens = viewModel.maxTokens.collectAsState().value,
+                        frequencyPenalty = viewModel.frequencyPenalty.collectAsState().value,
+                        onParametersChanged = { temp, tp, mt, fp ->
+                            viewModel.updateParameters(temp, tp, mt, fp)
+                        }
+                    )
+
+                    // Status message
+                    Text(
+                        text = viewModel.statusMessage.collectAsState().value,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+
+                    // Clear button
+                    val interactionMode = viewModel.interactionMode.collectAsState().value
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        Button(
+                            onClick = {
+                                if (interactionMode == InteractViewModel.InteractionMode.CHAT) {
+                                    viewModel.clearChat()
+                                } else {
+                                    viewModel.clearGeneratedText()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        ) {
+                            Text("Clear")
+                        }
+                    }
+
+                    // Add some padding at the bottom for better scrolling
+                    Spacer(modifier = Modifier.height(32.dp))
+                }
+            }
         }
 
-        // Description text
-        Text(
-            text = "Streaming responses will be available in a future update",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp)
+        // Global loading overlay - only for initial loading, not for message generation
+        if (viewModel.isLoading) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background.copy(alpha = 0.7f)
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+        }
+    }
+
+    // Error dialog
+    if (showErrorDialog) {
+        AlertDialog(
+            onDismissRequest = { showErrorDialog = false },
+            title = {
+                Text("Error")
+            },
+            text = {
+                Text(errorMessage)
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { showErrorDialog = false }
+                ) {
+                    Text("Dismiss")
+                }
+            }
         )
     }
 }
