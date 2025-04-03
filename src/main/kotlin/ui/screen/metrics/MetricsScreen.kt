@@ -34,29 +34,6 @@ fun MetricsScreen(viewModel: MetricsViewModel) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
         }
-        return
-    }
-
-    errors?.let { errorMessage ->
-        if (responseTimeData.isEmpty() &&
-            requestCountData.isEmpty() &&
-            nodePerformance.isEmpty() &&
-            modelPerformance.isEmpty()) {
-
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "Error: $errorMessage",
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = { viewModel.loadMetrics() }) {
-                        Text("Retry")
-                    }
-                }
-            }
-            return
-        }
     }
 
     Column(

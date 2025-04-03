@@ -90,19 +90,52 @@ class MetricsViewModel(
 
     private fun processMetricsData() {
         _metricsData.value?.let { data ->
+            logger.debug { "Processing metrics data: ${data.responseTimes?.size ?: 0} response time series, " +
+                    "${data.requestCounts?.size ?: 0} request counts" }
+
+            // Response time data
             _responseTimeData.value = _selectedNode.value?.let {
-                data.responseTimes?.get(it)?.toList() ?: emptyList()
-            } ?: data.responseTimes?.values?.flatten().orEmpty()
+                val nodeData = data.responseTimes?.get(it)?.toList()
+                logger.debug { "Response time data for node $it: ${nodeData?.size ?: 0} points" }
+                nodeData ?: emptyList()
+            } ?: run {
+                val allData = data.responseTimes?.values?.flatten().orEmpty()
+                logger.debug { "Combined response time data: ${allData.size} points" }
+                allData
+            }
 
-            _requestCountData.value = data.requestCounts.orEmpty()
+            // Request count data
+            val countData = data.requestCounts.orEmpty()
+            logger.debug { "Request count data: ${countData.size} points" }
+            _requestCountData.value = countData
 
+            // Node performance
             _nodePerformance.value = _selectedNode.value?.let {
-                data.nodePerformance?.filterKeys { key -> key == it }
-            } ?: data.nodePerformance.orEmpty()
+                val nodePerf = data.nodePerformance?.filterKeys { key -> key == it }.orEmpty()
+                logger.debug { "Node performance for $it: ${nodePerf.size} entries" }
+                nodePerf
+            } ?: run {
+                val allNodePerf = data.nodePerformance.orEmpty()
+                logger.debug { "All node performance: ${allNodePerf.size} entries" }
+                allNodePerf
+            }
 
+            // Model performance
             _modelPerformance.value = _selectedModel.value?.let {
-                data.modelPerformance?.filterKeys { key -> key == it }
-            } ?: data.modelPerformance.orEmpty()
+                val modelPerf = data.modelPerformance?.filterKeys { key -> key == it }.orEmpty()
+                logger.debug { "Model performance for $it: ${modelPerf.size} entries" }
+                modelPerf
+            } ?: run {
+                val allModelPerf = data.modelPerformance.orEmpty()
+                logger.debug { "All model performance: ${allModelPerf.size} entries" }
+                allModelPerf
+            }
+        } ?: run {
+            logger.warn { "Metrics data is null, using empty default values" }
+            _responseTimeData.value = emptyList()
+            _requestCountData.value = emptyList()
+            _nodePerformance.value = emptyMap()
+            _modelPerformance.value = emptyMap()
         }
     }
 

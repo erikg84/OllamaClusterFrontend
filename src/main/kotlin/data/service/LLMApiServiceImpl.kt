@@ -50,6 +50,7 @@ class LLMApiServiceImpl(private val httpClient: HttpClient) : LLMApiService {
         const val SYSTEM_INFO = "admin/system"
         const val RESET_STATS = "admin/reset-stats"
         const val LOGS = "admin/logs"
+        const val CLUSTER_METRICS = "api/cluster/metrics"
     }
 
     override suspend fun checkHealth(): Boolean {
@@ -339,6 +340,21 @@ class LLMApiServiceImpl(private val httpClient: HttpClient) : LLMApiService {
 
     override suspend fun getMetrics(): MetricsData {
         try {
+            // Try the cluster metrics endpoint first
+            try {
+                logger.debug { "Requesting metrics from cluster endpoint: ${Endpoints.CLUSTER_METRICS}" }
+                val response: HttpResponse = httpClient.get(Endpoints.CLUSTER_METRICS)
+                if (response.status.isSuccess()) {
+                    val metricsData: MetricsData = response.body()
+                    logger.debug { "Received cluster metrics data" }
+                    return metricsData
+                }
+            } catch (e: Exception) {
+                logger.warn { "Failed to get cluster metrics, falling back to admin metrics: ${e.message}" }
+            }
+
+            // Fall back to admin metrics
+            logger.debug { "Requesting metrics from admin endpoint: ${Endpoints.METRICS}" }
             val response: HttpResponse = httpClient.get(Endpoints.METRICS)
             if (response.status.isSuccess()) {
                 return response.body()
