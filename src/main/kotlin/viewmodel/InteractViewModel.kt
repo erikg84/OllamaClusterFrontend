@@ -35,10 +35,10 @@ class InteractViewModel(
     val models: StateFlow<List<Model>> = _models.asStateFlow()
 
     // Selected options
-    private val _selectedNode = MutableStateFlow<Node?>(null)
+    private val _selectedNode = MutableStateFlow<Node?>(Node(id = "MAC_STUDIO", name = "MAC_STUDIO"))
     val selectedNode: StateFlow<Node?> = _selectedNode.asStateFlow()
 
-    private val _selectedModel = MutableStateFlow<Model?>(null)
+    private val _selectedModel = MutableStateFlow<Model?>(Model(id = "llama3.2:latest", name = "llama3.2:latest"))
     val selectedModel: StateFlow<Model?> = _selectedModel.asStateFlow()
 
     private val _interactionMode = MutableStateFlow(InteractionMode.CHAT)

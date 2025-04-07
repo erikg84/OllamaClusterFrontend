@@ -4,12 +4,16 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import ui.LLMClusterTheme
 import di.appModule
+import org.koin.compose.koinInject
+import ui.screen.ChatScreen
 import ui.screen.MainScreen
+import viewmodel.InteractViewModel
 
 @Composable
 fun App() {
     LLMClusterTheme {
-        MainScreen()
+        val viewModel = koinInject<InteractViewModel>()
+        ChatScreen(viewModel)
     }
 }
 
