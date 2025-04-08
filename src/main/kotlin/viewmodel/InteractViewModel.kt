@@ -2,6 +2,7 @@ package viewmodel
 
 import androidx.compose.runtime.mutableStateListOf
 import domain.model.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,8 +12,11 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
-import kotlinx.coroutines.launch
 import mu.KotlinLogging
+import repository.AdminRepository
+import repository.ClusterRepository
+import repository.NodeRepository
+import repository.QueueRepository
 import usecase.*
 
 private val logger = KotlinLogging.logger {}
@@ -24,7 +28,11 @@ class InteractViewModel(
     private val getAllNodesUseCase: GetAllNodesUseCase,
     private val getAllModelsUseCase: GetAllModelsUseCase,
     private val chatWithLLMUseCase: ChatWithLLMUseCase,
-    private val generateTextUseCase: GenerateTextUseCase
+    private val generateTextUseCase: GenerateTextUseCase,
+    private val clusterRepository: ClusterRepository,
+    private val adminRepository: AdminRepository,
+    private val queueRepository: QueueRepository,
+    private val nodeRepository: NodeRepository
 ) : BaseViewModel() {
 
     // Available nodes and models
@@ -78,8 +86,68 @@ class InteractViewModel(
     private val _isGenerating = MutableStateFlow(false)
     val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
 
+    private val _clusterStatus = MutableStateFlow<ClusterStatus?>(null)
+    val clusterStatus: StateFlow<ClusterStatus?> = _clusterStatus.asStateFlow()
+
+    private val _activeNodes = MutableStateFlow<List<Node>>(emptyList())
+    val activeNodes: StateFlow<List<Node>> = _activeNodes.asStateFlow()
+
+    private val _queueStatus = MutableStateFlow<QueueStatus?>(null)
+    val queueStatus: StateFlow<QueueStatus?> = _queueStatus.asStateFlow()
+
+    private val _performanceMetrics = MutableStateFlow<PerformanceMetrics?>(null)
+    val performanceMetrics: StateFlow<PerformanceMetrics?> = _performanceMetrics.asStateFlow()
+
+    private val _systemInfo = MutableStateFlow<SystemInfo?>(null)
+    val systemInfo: StateFlow<SystemInfo?> = _systemInfo.asStateFlow()
+
+    // For response times chart
+    private val _responseTimes = MutableStateFlow(0.0)
+    val responseTimes: StateFlow<Double> = _responseTimes.asStateFlow()
+
+    // For resource usage
+    private val _resourceUsage = MutableStateFlow<Map<String, Double>>(emptyMap())
+    val resourceUsage: StateFlow<Map<String, Double>> = _resourceUsage.asStateFlow()
+
+    // UI state for layout
+    private val _isDashboardVisible = MutableStateFlow(true)
+    val isDashboardVisible: StateFlow<Boolean> = _isDashboardVisible.asStateFlow()
+
+    private val _cpuUsage = MutableStateFlow(0.0)
+    val cpuUsage: StateFlow<Double> = _cpuUsage.asStateFlow()
+
+    private val _memoryUsage = MutableStateFlow(0.0)
+    val memoryUsage: StateFlow<Double> = _memoryUsage.asStateFlow()
+
+    private val _gpuUsage = MutableStateFlow(0.0)
+    val gpuUsage: StateFlow<Double> = _gpuUsage.asStateFlow()
+
+    private val _queueSize = MutableStateFlow(0)
+    val queueSize: StateFlow<Int> = _queueSize.asStateFlow()
+
+    private val _logs = MutableStateFlow<List<LogEntry>>(emptyList())
+    val logs: StateFlow<List<LogEntry>> = _logs.asStateFlow()
+
+    // Timer for auto-refresh
+    private var monitoringJob: Job? = null
+    private val monitoringInterval = 5000L
+
     init {
         loadNodesAndModels()
+        startMonitoring()
+        refreshLogs()
+    }
+
+    fun refreshLogs() {
+        viewModelScope.launch {
+            try {
+                val latestLogs = adminRepository.getLogs()
+                _logs.value = latestLogs.sortedByDescending { it.timestamp }
+            } catch (e: Exception) {
+                handleError(e)
+                setStatusMessage("Error fetching logs: ${e.message}")
+            }
+        }
     }
 
     /**
@@ -236,7 +304,7 @@ class InteractViewModel(
     /**
      * Send a chat request to the LLM
      */
-    private fun sendChatRequest() {
+    private fun sendChatRequestNoStream() {
         if (_selectedNode.value == null || _selectedModel.value == null || chatMessages.isEmpty()) {
             setStatusMessage("Please select a node, model, and enter a message")
             return
@@ -342,5 +410,192 @@ class InteractViewModel(
      */
     enum class InteractionMode {
         CHAT, GENERATE
+    }
+
+    /**
+     * Toggle dashboard visibility
+     */
+    fun toggleDashboard() {
+        _isDashboardVisible.value = !_isDashboardVisible.value
+    }
+
+    /**
+     * Start periodic monitoring of cluster stats
+     */
+    private fun startMonitoring() {
+        monitoringJob?.cancel()
+        monitoringJob = viewModelScope.launch {
+            while (isActive) {
+                refreshMonitoringData()
+                delay(monitoringInterval)
+            }
+        }
+    }
+
+    /**
+     * Stop monitoring
+     */
+    fun stopMonitoring() {
+        monitoringJob?.cancel()
+        monitoringJob = null
+    }
+
+    /**
+     * Refresh all monitoring data
+     */
+    fun refreshMonitoringData() {
+        viewModelScope.launch {
+            try {
+                // Fetch all monitoring data in parallel
+                val clusterStatusDeferred = async { clusterRepository.getClusterStatus() }
+                val queueStatusDeferred = async { queueRepository.getQueueStatus() }
+                val metricsDeferred = async { adminRepository.getPerformanceMetrics() }
+                val systemInfoDeferred = async { adminRepository.getSystemInfo() }
+                val nodesDeferred = async { nodeRepository.getAllNodes() }
+                val logsDeferred = async { adminRepository.getLogs() }
+
+                // Get all active nodes
+                val allNodes = nodesDeferred.await()
+                _activeNodes.value = allNodes.filter { it.status == NodeStatus.ONLINE }
+
+                // Update cluster status
+                _clusterStatus.value = clusterStatusDeferred.await()
+
+                // Update queue status
+                val queueStatus = queueStatusDeferred.await()
+                _queueStatus.value = queueStatus
+                _queueSize.value = queueStatus.pending ?: 0
+
+                // Update performance metrics and extract response times
+                val metrics = metricsDeferred.await()
+                _performanceMetrics.value = metrics
+
+                // Get system info for resource usage
+                val sysInfo = systemInfoDeferred.await()
+                _systemInfo.value = sysInfo
+
+                val latestLogs = logsDeferred.await()
+                _logs.value = latestLogs.sortedByDescending { it.timestamp }
+
+                // Set CPU usage directly
+                _cpuUsage.value = sysInfo.cpuUsage ?: 0.0
+
+                // Calculate memory usage percentage
+                sysInfo.memoryUsage?.let {
+                    val memUsed = it.used?.replace(Regex("[^0-9.]"), "")?.toDoubleOrNull() ?: 0.0
+                    val memTotal = it.total?.replace(Regex("[^0-9.]"), "")?.toDoubleOrNull() ?: 1.0
+                    if (memTotal > 0) {
+                        _memoryUsage.value = (memUsed / memTotal) * 100.0
+                    }
+                }
+
+                // Calculate GPU usage based on node metrics if available
+                // Otherwise estimate based on queue and active nodes
+                val nodeMetrics = metrics.nodeMetrics
+                if (nodeMetrics != null && nodeMetrics.isNotEmpty()) {
+                    // Average GPU usage across all nodes
+                    val avgGpuUsage = nodeMetrics.values
+                        .mapNotNull { it.requestCount.toDouble() / 100.0 }
+                        .average()
+                        .coerceIn(0.0, 100.0)
+                    _gpuUsage.value = avgGpuUsage * 100.0 // Scale to percentage
+                } else {
+                    // Fallback estimation
+                    val queueSizeValue = _queueSize.value
+                    val activeNodeCount = _activeNodes.value.size.coerceAtLeast(1)
+                    _gpuUsage.value = (queueSizeValue.toDouble() / activeNodeCount).coerceIn(0.0, 100.0) * 70.0
+                }
+
+                metrics.nodeMetrics.values.firstOrNull()?.avgResponseTime?.let {
+                    _responseTimes.value = it
+                }
+
+                setStatusMessage("Monitoring data refreshed")
+            } catch (e: Exception) {
+                handleError(e)
+                setStatusMessage("Error refreshing monitoring data: ${e.message}")
+            }
+        }
+    }
+
+    private fun sendChatRequest() {
+        if (_selectedNode.value == null || _selectedModel.value == null || chatMessages.isEmpty()) {
+            setStatusMessage("Please select a node, model, and enter a message")
+            return
+        }
+
+        val request = ChatRequest(
+            node = _selectedNode.value!!.id,
+            model = _selectedModel.value!!.id,
+            messages = chatMessages.toList(),
+            stream = _streamResponses.value,
+        )
+
+        viewModelScope.launch {
+            try {
+                _isGenerating.value = true
+
+                if (_streamResponses.value) {
+                    // Create a placeholder message for streaming
+                    val assistantMessage = ChatMessage(
+                        role = MessageRole.ASSISTANT,
+                        content = ""
+                    )
+                    chatMessages.add(assistantMessage)
+
+                    // Handle streaming response
+                    val responseFlow = chatWithLLMUseCase.stream(request)
+                    processChatResponseStream(responseFlow, assistantMessage)
+                } else {
+                    // Handle non-streaming response
+                    val response = chatWithLLMUseCase(request) as ChatResponse
+                    response.message?.let { chatMessages.add(it) }
+                    setStatusMessage("Response received")
+                }
+            } catch (e: Exception) {
+                handleError(e)
+                setStatusMessage("Error in chat: ${e.message}")
+            } finally {
+                _isGenerating.value = false
+            }
+        }
+    }
+
+    // Update the processChatResponseStream function to update a specific message
+    private suspend fun processChatResponseStream(
+        responseFlow: Flow<ChatResponse>,
+        assistantMessage: ChatMessage
+    ) {
+        var streamedContent = ""
+
+        responseFlow
+            .onStart { setStatusMessage("Streaming response...") }
+            .onEach { response ->
+                // Update the content with the streamed chunk
+                val newContent = response.message?.content ?: ""
+                if (newContent.isNotEmpty()) {
+                    streamedContent += newContent
+                    val updatedMessage = assistantMessage.copy(content = streamedContent)
+
+                    // Find the index of the placeholder message and update it
+                    val index = chatMessages.indexOf(assistantMessage)
+                    if (index >= 0) {
+                        chatMessages[index] = updatedMessage
+                    }
+                }
+            }
+            .onCompletion {
+                setStatusMessage("Response completed")
+            }
+            .catch { e ->
+                handleError(e)
+                setStatusMessage("Error in streaming: ${e.message}")
+            }
+            .collect()
+    }
+
+    override fun clear() {
+        super.clear()
+        stopMonitoring()
     }
 }

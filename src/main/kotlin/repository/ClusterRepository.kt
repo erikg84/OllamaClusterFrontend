@@ -13,6 +13,12 @@ interface ClusterRepository {
      * @return ClusterStatus object with node and model information
      */
     suspend fun getClusterStatus(): ClusterStatus
+
+    /**
+     * Get detailed cluster metrics
+     * @return ClusterMetrics with comprehensive metrics
+     */
+    suspend fun getClusterMetrics(): ClusterMetrics
 }
 
 private val logger = KotlinLogging.logger {}
@@ -28,6 +34,16 @@ class ClusterRepositoryImpl(private val apiService: LLMApiService) : ClusterRepo
             apiService.getClusterStatus()
         } catch (e: Exception) {
             logger.error(e) { "Error fetching cluster status" }
+            throw e
+        }
+    }
+
+    override suspend fun getClusterMetrics(): ClusterMetrics {
+        logger.debug { "Fetching cluster metrics" }
+        return try {
+            apiService.getClusterMetrics()
+        } catch (e: Exception) {
+            logger.error(e) { "Error fetching cluster metrics" }
             throw e
         }
     }

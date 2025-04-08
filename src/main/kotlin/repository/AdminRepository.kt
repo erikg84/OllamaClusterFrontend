@@ -32,6 +32,43 @@ interface AdminRepository {
      * @return List of LogEntry objects
      */
     suspend fun getLogs(level: LogLevel? = null): List<LogEntry>
+
+    /**
+     * Get performance metrics
+     * @return PerformanceMetrics with detailed model and node performance
+     */
+    suspend fun getPerformanceMetrics(): PerformanceMetrics
+
+    /**
+     * Get load balancing metrics
+     * @return LoadBalancingMetrics with node load and routing information
+     */
+    suspend fun getLoadBalancingMetrics(): LoadBalancingMetrics
+
+    /**
+     * Get Prometheus metrics
+     * @return Raw Prometheus metrics as a string
+     */
+    suspend fun getPrometheusMetrics(): String
+
+    /**
+     * Get cluster logs
+     * @param level Optional log level filter
+     * @return List of cluster-wide LogEntry objects
+     */
+    suspend fun getClusterLogs(level: LogLevel? = null): List<LogEntry>
+
+    /**
+     * Reset cluster-wide statistics
+     * @return true if the operation was successful
+     */
+    suspend fun resetClusterStats(): Boolean
+
+    /**
+     * Get comprehensive cluster metrics
+     * @return ClusterMetrics with detailed node and system information
+     */
+    suspend fun getClusterMetrics(): ClusterMetrics
 }
 
 private val logger = KotlinLogging.logger {}
@@ -79,6 +116,68 @@ class AdminRepositoryImpl(private val apiService: LLMApiService) : AdminReposito
             apiService.getLogs(level)
         } catch (e: Exception) {
             logger.error(e) { "Error fetching system logs" }
+            throw e
+        }
+    }
+
+    override suspend fun getPerformanceMetrics(): PerformanceMetrics {
+        logger.debug { "Fetching performance metrics" }
+        return try {
+            apiService.getPerformanceMetrics()
+        } catch (e: Exception) {
+            logger.error(e) { "Error fetching performance metrics" }
+            throw e
+        }
+    }
+
+    override suspend fun getLoadBalancingMetrics(): LoadBalancingMetrics {
+        logger.debug { "Fetching load balancing metrics" }
+        return try {
+            apiService.getLoadBalancingMetrics()
+        } catch (e: Exception) {
+            logger.error(e) { "Error fetching load balancing metrics" }
+            throw e
+        }
+    }
+
+    override suspend fun getPrometheusMetrics(): String {
+        logger.debug { "Fetching Prometheus metrics" }
+        return try {
+            apiService.getPrometheusMetrics()
+        } catch (e: Exception) {
+            logger.error(e) { "Error fetching Prometheus metrics" }
+            throw e
+        }
+    }
+
+    override suspend fun getClusterLogs(level: LogLevel?): List<LogEntry> {
+        logger.debug { "Fetching cluster logs with level filter: $level" }
+        return try {
+            apiService.getClusterLogs(level)
+        } catch (e: Exception) {
+            logger.error(e) { "Error fetching cluster logs" }
+            throw e
+        }
+    }
+
+    override suspend fun resetClusterStats(): Boolean {
+        logger.debug { "Resetting cluster statistics" }
+        return try {
+            val result = apiService.resetClusterStats()
+            logger.info { "Reset cluster stats result: $result" }
+            result
+        } catch (e: Exception) {
+            logger.error(e) { "Error resetting cluster statistics" }
+            throw e
+        }
+    }
+
+    override suspend fun getClusterMetrics(): ClusterMetrics {
+        logger.debug { "Fetching cluster metrics" }
+        return try {
+            apiService.getClusterMetrics()
+        } catch (e: Exception) {
+            logger.error(e) { "Error fetching cluster metrics" }
             throw e
         }
     }

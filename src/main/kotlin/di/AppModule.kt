@@ -48,7 +48,7 @@ val networkModule = module {
                 level = LogLevel.BODY
             }
             defaultRequest {
-                url("http://localhost:3001/")
+                url("http://192.168.68.143:3001/")
             }
         }
     }
@@ -98,7 +98,7 @@ val useCaseModule = module {
 
 val viewModelModule = module {
     factory { DashboardViewModel(get(), get(), get(), get(), get(), get()) }
-    factory { InteractViewModel(get(), get(), get(), get()) }
+    factory { InteractViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { MetricsViewModel(get(), get(), get()) }
     factory { AdminViewModel(get(), get(), get()) }
 }

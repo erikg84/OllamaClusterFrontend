@@ -36,6 +36,43 @@ interface LLMInteractionRepository {
      * @return Flow of GenerateResponse objects with incremental generated text
      */
     suspend fun streamGenerate(request: GenerateRequest): Flow<GenerateResponse>
+
+    /**
+     * Execute a model ensemble pattern
+     * @param query The input query
+     * @param models Optional list of models to use
+     * @param ensembleSize Number of models to include in the ensemble
+     * @return EnsembleResult with consensus output
+     */
+    suspend fun executeModelEnsemble(
+        query: String,
+        models: List<String>? = null,
+        ensembleSize: Int = 3
+    ): EnsembleResult
+
+    /**
+     * Execute a debate pattern between models
+     * @param query The input query
+     * @param models Optional list of models to debate
+     * @param debateRounds Number of debate rounds
+     * @return DebateResult with final synthesis
+     */
+    suspend fun executeDebatePattern(
+        query: String,
+        models: List<String>? = null,
+        debateRounds: Int = 3
+    ): DebateResult
+
+    /**
+     * Execute a MAESTRO workflow
+     * @param query The input query
+     * @param preferredModel Optional preferred model
+     * @return MAESTROResult with workflow execution details
+     */
+    suspend fun executeMAESTROWorkflow(
+        query: String,
+        preferredModel: String? = null
+    ): MAESTROResult
 }
 
 private val logger = KotlinLogging.logger {}
@@ -89,6 +126,47 @@ class LLMInteractionRepositoryImpl(private val apiService: LLMApiService) : LLMI
             responseFlow
         } catch (e: Exception) {
             logger.error(e) { "Error during streaming generate request to node: ${request.node}, model: ${request.model}" }
+            throw e
+        }
+    }
+
+    override suspend fun executeModelEnsemble(
+        query: String,
+        models: List<String>?,
+        ensembleSize: Int
+    ): EnsembleResult {
+        logger.debug { "Executing model ensemble with query: $query" }
+        return try {
+            apiService.executeModelEnsemble(query, models, ensembleSize)
+        } catch (e: Exception) {
+            logger.error(e) { "Error executing model ensemble" }
+            throw e
+        }
+    }
+
+    override suspend fun executeDebatePattern(
+        query: String,
+        models: List<String>?,
+        debateRounds: Int
+    ): DebateResult {
+        logger.debug { "Executing debate pattern with query: $query" }
+        return try {
+            apiService.executeDebatePattern(query, models, debateRounds)
+        } catch (e: Exception) {
+            logger.error(e) { "Error executing debate pattern" }
+            throw e
+        }
+    }
+
+    override suspend fun executeMAESTROWorkflow(
+        query: String,
+        preferredModel: String?
+    ): MAESTROResult {
+        logger.debug { "Executing MAESTRO workflow with query: $query" }
+        return try {
+            apiService.executeMAESTROWorkflow(query, preferredModel)
+        } catch (e: Exception) {
+            logger.error(e) { "Error executing MAESTRO workflow" }
             throw e
         }
     }

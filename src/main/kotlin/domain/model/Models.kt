@@ -196,7 +196,10 @@ data class TimeSeriesPoint(
 data class NodePerformanceMetrics(
     @JsonProperty("avgResponseTime") val avgResponseTime: Double? = null,
     @JsonProperty("requestsProcessed") val requestsProcessed: Int? = null,
-    @JsonProperty("errorRate") val errorRate: Double? = null
+    @JsonProperty("errorRate") val errorRate: Double? = null,
+    @JsonProperty("requestCount") val requestCount: Int,
+    @JsonProperty("cpuUsage") val cpuUsage: Double,
+    @JsonProperty("memoryUsage") val memoryUsage: Double
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -288,3 +291,215 @@ suspend inline fun <reified T, R> HttpResponse.mapTo(crossinline transform: (T) 
         throw Exception("API error: ${apiResponse.message}")
     }
 }
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class EnsembleResult(
+    val id: String,
+    val consensusOutput: String,
+    val completions: List<EnsembleCompletion>,
+    val executionTimeMs: Long
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class EnsembleCompletion(
+    val model: String,
+    val text: String,
+    val score: Double
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class DebateResult(
+    val id: String,
+    val finalSynthesis: String,
+    val debateMessages: List<DebateMessage>,
+    val executionTimeMs: Long
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class DebateMessage(
+    val model: String,
+    val content: String,
+    val round: Int
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class MAESTROResult(
+    val id: String,
+    val conversationId: String,
+    val finalOutput: String,
+    val agents: List<MAESTROAgent>,
+    val executionTimeMs: Long
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class MAESTROAgent(
+    val agentType: String,
+    val content: String,
+    val timestamp: Long
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class ExecutionStatus(
+    val id: String,
+    val pattern: String,
+    val query: String,
+    val models: List<String>,
+    val state: String,
+    val startTime: Long,
+    val endTime: Long?,
+    val result: Any?
+)
+
+// Task decomposition models
+@JsonIgnoreProperties(ignoreUnknown = true)
+enum class TaskStatus {
+    PENDING, READY, RUNNING, COMPLETED, FAILED
+}
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+enum class TaskType {
+    REASONING, RESEARCH, CREATIVE, CODE, SYNTHESIS, EXECUTION
+}
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+enum class DecompositionStrategy {
+    SEQUENTIAL, PARALLEL, HIERARCHICAL, DYNAMIC
+}
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class TaskInfo(
+    val id: String,
+    val type: TaskType,
+    val content: String,
+    val status: TaskStatus,
+    val dependencies: List<String>,
+    val startedAt: Long? = null,
+    val completedAt: Long? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class WorkflowInfo(
+    val id: String,
+    val decompositionStrategy: DecompositionStrategy,
+    val createdAt: Long,
+    val completedAt: Long? = null,
+    val tasks: List<TaskInfo>
+)
+
+// Performance optimization models
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class CacheStats(
+    val entries: Int,
+    val hitRate: Double,
+    val missRate: Double,
+    val avgResponseSize: Int
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class BatchQueueStats(
+    val activeQueues: Int,
+    val totalQueuedRequests: Int,
+    val avgProcessingTimeMs: Int,
+    val avgBatchSize: Double
+)
+
+// Agent conversation models
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class AgentConversation(
+    val id: String,
+    val state: String,
+    val initialQuery: String,
+    val messages: List<AgentMessage>,
+    val createdAt: Long,
+    val completedAt: Long? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class AgentMessage(
+    val role: String,
+    val content: String,
+    val timestamp: Long
+)
+
+// Additional admin models
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class PerformanceMetrics(
+    val modelMetrics: Map<String, ModelMetrics>,
+    val nodeMetrics: Map<String, NodePerformanceMetrics>,
+    val systemMetrics: SystemPerformanceMetrics
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class ModelMetrics(
+    val requestCount: Int,
+    val avgResponseTimeMs: Double,
+    val avgTokensPerSecond: Double,
+    val errorRate: Double
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class SystemPerformanceMetrics(
+    val totalRequests: Int,
+    val requestsPerMinute: Double,
+    val avgResponseTimeMs: Double,
+    val p95ResponseTimeMs: Double,
+    val p99ResponseTimeMs: Double
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class LoadBalancingMetrics(
+    val nodeMetrics: Map<String, NodeLoadMetrics>,
+    val routingDecisions: List<RoutingDecision>
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class NodeLoadMetrics(
+    val node: String,
+    val currentLoad: Double,
+    val capacity: Double,
+    val activeRequests: Int,
+    val requestsServed: Int,
+    val avgResponseTimeMs: Double
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class RoutingDecision(
+    val timestamp: Long,
+    val requestId: String,
+    val model: String,
+    val selectedNode: String,
+    val reason: String
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class ClusterMetrics(
+    val nodeMetrics: Map<String, NodeMetrics>,
+    val systemInfo: Map<String, SystemInfo>
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class NodeMetrics(
+    val requestCounts: Map<String, Long>,
+    val nodePerformance: Map<String, NodePerf>,
+    val modelPerformance: Map<String, ModelPerf>,
+    val responseTimes: Map<String, List<TimePoint>>
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class NodePerf(
+    val avgResponseTime: Double = 0.0,
+    val requestsProcessed: Long = 0,
+    val errorRate: Double = 0.0
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class ModelPerf(
+    val avgResponseTime: Double = 0.0,
+    val requestsProcessed: Long = 0,
+    val avgTokensGenerated: Double = 0.0
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class TimePoint(
+    val time: String = "",
+    val value: Double = 0.0
+)
