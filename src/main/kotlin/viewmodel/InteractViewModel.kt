@@ -3,15 +3,7 @@ package viewmodel
 import androidx.compose.runtime.mutableStateListOf
 import domain.model.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.onCompletion
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.*
 import mu.KotlinLogging
 import repository.AdminRepository
 import repository.ClusterRepository
@@ -128,6 +120,9 @@ class InteractViewModel(
     private val _logs = MutableStateFlow<List<LogEntry>>(emptyList())
     val logs: StateFlow<List<LogEntry>> = _logs.asStateFlow()
 
+    private val _scrollToLatestEvent = MutableSharedFlow<Unit>()
+    val scrollToLatestEvent = _scrollToLatestEvent.asSharedFlow()
+
     // Timer for auto-refresh
     private var monitoringJob: Job? = null
     private val monitoringInterval = 5000L
@@ -220,6 +215,16 @@ class InteractViewModel(
      */
     fun clearGeneratedText() {
         _generatedText.value = ""
+    }
+
+    fun scrollToLatestMessage() {
+        viewModelScope.launch {
+            if (chatMessages.isNotEmpty()) {
+                // Signal UI to scroll to latest message
+                // (We'll add an event flow for this)
+                _scrollToLatestEvent.emit(Unit)
+            }
+        }
     }
 
     /**
@@ -546,11 +551,13 @@ class InteractViewModel(
                     // Handle streaming response
                     val responseFlow = chatWithLLMUseCase.stream(request)
                     processChatResponseStream(responseFlow, assistantMessage)
+                    scrollToLatestMessage()
                 } else {
                     // Handle non-streaming response
                     val response = chatWithLLMUseCase(request) as ChatResponse
                     response.message?.let { chatMessages.add(it) }
                     setStatusMessage("Response received")
+                    scrollToLatestMessage()
                 }
             } catch (e: Exception) {
                 handleError(e)

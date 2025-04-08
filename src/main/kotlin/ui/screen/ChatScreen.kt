@@ -1,16 +1,9 @@
 package ui.screen
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -39,17 +32,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.*
 import domain.model.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import viewmodel.InteractViewModel
 import kotlin.math.max
 
-// Matrix Theme Colors
+
 private object MatrixThemeColors {
     val background = Color(0xFF000000) // Pure black
     val surface = Color(0xFF0D0D0D) // Nearly black
@@ -74,6 +68,7 @@ private object MatrixThemeColors {
 
 @Composable
 fun ChatScreen(viewModel: InteractViewModel) {
+
     val chatMessages = viewModel.chatMessages
     val isGenerating by viewModel.isGenerating.collectAsState()
     val streamingEnabled by viewModel.streamResponses.collectAsState()
@@ -92,6 +87,29 @@ fun ChatScreen(viewModel: InteractViewModel) {
     val gpuUsage by viewModel.gpuUsage.collectAsState()
     val performanceMetrics by viewModel.performanceMetrics.collectAsState()
     val systemInfo by viewModel.systemInfo.collectAsState()
+    val messageAnimationStates = remember { mutableStateMapOf<String, Boolean>() }
+    val messageDisplayStates = remember { mutableStateMapOf<String, Boolean>() }
+    val isAnyMessageAnimating = messageAnimationStates.values.any { !it }
+
+    LaunchedEffect(isAnyMessageAnimating) {
+        if (isAnyMessageAnimating && chatMessages.isNotEmpty()) {
+            // Continuously scroll to the bottom while animation is happening
+            while (isActive && isAnyMessageAnimating) {
+                scrollState.animateScrollToItem(chatMessages.lastIndex)
+                delay(100) // Check scroll position frequently
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.scrollToLatestEvent.collect {
+            if (chatMessages.isNotEmpty()) {
+                coroutineScope.launch {
+                    scrollState.animateScrollToItem(chatMessages.size - 1)
+                }
+            }
+        }
+    }
 
     // Add state for logs (we'll fetch these in the viewModel)
     val logs = remember { mutableStateListOf<LogEntry>() }
@@ -139,7 +157,19 @@ fun ChatScreen(viewModel: InteractViewModel) {
     // Auto-scroll to bottom when new messages are added
     LaunchedEffect(chatMessages.size) {
         if (chatMessages.isNotEmpty()) {
-            scrollState.animateScrollToItem(chatMessages.size - 1)
+            // Initialize animation state for new messages
+            chatMessages.forEachIndexed { index, message ->
+                val key = "${message.role}_${message.content?.hashCode()}_$index"
+                if (!messageAnimationStates.containsKey(key)) {
+                    // Initialize: false = not completed, true = completed
+                    val isCompleted = message.role != MessageRole.ASSISTANT ||
+                            index < chatMessages.lastIndex
+                    messageAnimationStates[key] = isCompleted
+                }
+            }
+
+            // Scroll to the latest message
+            scrollState.animateScrollToItem(chatMessages.lastIndex)
         }
     }
 
@@ -166,18 +196,53 @@ fun ChatScreen(viewModel: InteractViewModel) {
                         LazyColumn(
                             state = scrollState,
                             modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(bottom = 20.dp)
                         ) {
-                            items(chatMessages) { message ->
-                                AnimatedChatMessage(
-                                    message = message,
-                                    onCopyToClipboard = {
-                                        coroutineScope.launch {
-                                            snackbarHostState.showSnackbar("Message copied to clipboard",
-                                                withDismissAction = true)
+                            itemsIndexed(chatMessages) { index, message ->
+                                val key = "${message.role}_${message.content?.hashCode()}_$index"
+                                val isAnimationComplete = messageAnimationStates[key] ?: true
+
+                                if (!isAnimationComplete && message.role == MessageRole.ASSISTANT) {
+                                    // Animated message (typing effect)
+                                    AnimatedChatMessage(
+                                        message = message,
+                                        onCopyToClipboard = {
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    "Message copied to clipboard",
+                                                    withDismissAction = true
+                                                )
+                                            }
+                                        },
+                                        onAnimationProgress = { progress ->
+                                            // Trigger scroll on each animation update
+                                            if (progress >= 1.0f) {
+                                                messageAnimationStates[key] = true
+                                            }
+
+                                            // Ensure we're scrolled to the bottom during animation
+                                            if (index == chatMessages.lastIndex) {
+                                                coroutineScope.launch {
+                                                    scrollState.animateScrollToItem(chatMessages.lastIndex)
+                                                }
+                                            }
                                         }
-                                    }
-                                )
+                                    )
+                                } else {
+                                    // Static message (no animation)
+                                    StaticChatMessage(
+                                        message = message,
+                                        onCopyToClipboard = {
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    "Message copied to clipboard",
+                                                    withDismissAction = true
+                                                )
+                                            }
+                                        }
+                                    )
+                                }
                             }
                         }
 
@@ -827,101 +892,6 @@ fun ImprovedResponseTimesChart(responseTimes: List<TimeSeriesPoint>) {
     }
 }
 
-@Composable
-fun ImprovedChatMessageItem(
-    message: ChatMessage,
-    onCopyToClipboard: () -> Unit
-) {
-    val clipboardManager = LocalClipboardManager.current
-
-    val messageColor = when (message.role) {
-        MessageRole.USER -> MatrixThemeColors.userMessageBg
-        MessageRole.ASSISTANT -> MatrixThemeColors.assistantMessageBg
-        else -> MatrixThemeColors.surface
-    }
-
-    val textColor = when (message.role) {
-        MessageRole.USER -> MatrixThemeColors.userMessageText
-        MessageRole.ASSISTANT -> MatrixThemeColors.assistantMessageText
-        else -> MatrixThemeColors.highlightColor.copy(alpha = 0.7f)
-    }
-
-    // Center the message boxes in the column
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Message content with Matrix-styled bubbles
-        Box(
-            modifier = Modifier
-                // Make the width match the parent width (same as input box)
-                .fillMaxWidth(0.95f)  // Using 95% to match typical input box width
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 8.dp,
-                        topEnd = 8.dp,
-                        bottomStart = if (message.role == MessageRole.USER) 8.dp else 2.dp,
-                        bottomEnd = if (message.role == MessageRole.USER) 2.dp else 8.dp
-                    )
-                )
-                .background(messageColor)
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onLongPress = {
-                            clipboardManager.setText(AnnotatedString(message.content.orEmpty()))
-                            onCopyToClipboard()
-                        }
-                    )
-                }
-                // Only padding for top, bottom and right - horizontal padding will be added to text
-                .padding(top = 12.dp, bottom = 12.dp)
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Text content with left alignment and horizontal padding
-                Text(
-                    text = message.content.orEmpty(),
-                    color = textColor,
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontFamily = FontFamily.Monospace
-                    ),
-                    textAlign = TextAlign.Start,  // Left-aligned text
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 32.dp)  // 32dp horizontal spacing as requested
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Copy button inside the message box
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    IconButton(
-                        onClick = {
-                            clipboardManager.setText(AnnotatedString(message.content.orEmpty()))
-                            onCopyToClipboard()
-                        },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = "Copy to clipboard",
-                            tint = textColor.copy(alpha = 0.7f),
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        // Add some spacing between messages
-        Spacer(modifier = Modifier.height(8.dp))
-    }
-}
-
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun ImprovedChatInputArea(
@@ -1007,7 +977,12 @@ fun ImprovedChatInputArea(
                                 false
                             }
                         },
-                    placeholder = { Text("Enter the Matrix...", color = MatrixThemeColors.highlightColor.copy(alpha = 0.4f)) },
+                    placeholder = {
+                        Text(
+                            "Enter the Matrix...",
+                            color = MatrixThemeColors.highlightColor.copy(alpha = 0.4f)
+                        )
+                    },
                     maxLines = 3,
                     colors = TextFieldDefaults.colors(
                         unfocusedContainerColor = MatrixThemeColors.inputFieldBg,
@@ -1076,54 +1051,11 @@ fun ImprovedChatInputArea(
 }
 
 @Composable
-fun AnimatedChatMessage(
+fun StaticChatMessage(
     message: ChatMessage,
     onCopyToClipboard: () -> Unit
 ) {
     val clipboardManager = LocalClipboardManager.current
-
-    // State to track currently displayed text for animation
-    var displayedText by remember(message.content) {
-        mutableStateOf(if (message.role == MessageRole.USER) message.content ?: "" else "")
-    }
-
-    // State for cursor blink animation
-    var showCursor by remember { mutableStateOf(false) }
-
-    // Animate cursor blinking
-    LaunchedEffect(Unit) {
-        while (true) {
-            showCursor = !showCursor
-            delay(500) // Blink every 500ms
-        }
-    }
-
-    // Typing animation effect
-    LaunchedEffect(message.content) {
-        if (message.role == MessageRole.ASSISTANT && !message.content.isNullOrEmpty()) {
-            val fullText = message.content ?: ""
-            // If we're just starting with this message or content changed completely
-            if (displayedText.isEmpty() || !fullText.startsWith(displayedText)) {
-                displayedText = ""
-                val charsToAnimate = fullText.length
-                // Animate at a reasonable speed - adjust for faster/slower typing
-                for (i in 1..charsToAnimate) {
-                    val partialText = fullText.take(i)
-                    displayedText = partialText
-                    // Faster typing for longer messages
-                    val delay = when {
-                        fullText.length > 500 -> 5L // Very fast for long responses
-                        fullText.length > 200 -> 8L // Fast for medium responses
-                        else -> 12L // Normal speed for short responses
-                    }
-                    delay(delay)
-                }
-            }
-        } else if (message.role == MessageRole.USER) {
-            // User messages appear instantly
-            displayedText = message.content ?: ""
-        }
-    }
 
     val messageColor = when (message.role) {
         MessageRole.USER -> MatrixThemeColors.userMessageBg
@@ -1136,12 +1068,6 @@ fun AnimatedChatMessage(
         MessageRole.ASSISTANT -> MatrixThemeColors.assistantMessageText
         else -> MatrixThemeColors.highlightColor.copy(alpha = 0.7f)
     }
-
-    // Is the message still typing?
-    val isTyping = message.role == MessageRole.ASSISTANT &&
-            displayedText.isNotEmpty() &&
-            message.content != null &&
-            displayedText.length < message.content.length
 
     // Center the message boxes in the column
     Column(
@@ -1174,7 +1100,151 @@ fun AnimatedChatMessage(
             Column(
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Text content with typing effect
+                // Text content - no animation, just display the full text
+                Text(
+                    text = message.content.orEmpty(),
+                    color = textColor,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontFamily = FontFamily.Monospace
+                    ),
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 32.dp)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Copy button inside the message box
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    IconButton(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(message.content.orEmpty()))
+                            onCopyToClipboard()
+                        },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy to clipboard",
+                            tint = textColor.copy(alpha = 0.7f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+    }
+}
+
+@Composable
+fun AnimatedChatMessage(
+    message: ChatMessage,
+    onCopyToClipboard: () -> Unit,
+    onAnimationProgress: (Float) -> Unit
+) {
+    val clipboardManager = LocalClipboardManager.current
+
+    // State to track currently displayed text
+    var displayedText by remember { mutableStateOf("") }
+
+    // State for cursor blinking
+    var showCursor by remember { mutableStateOf(false) }
+
+    // Animate cursor blinking
+    LaunchedEffect(Unit) {
+        while (true) {
+            showCursor = !showCursor
+            delay(500) // Blink every 500ms
+        }
+    }
+
+    // Typing animation effect
+    LaunchedEffect(message.content) {
+        if (message.role == MessageRole.ASSISTANT && !message.content.isNullOrEmpty()) {
+            val fullText = message.content ?: ""
+            displayedText = ""
+            val charsToAnimate = fullText.length
+
+            // Animate at a reasonable speed
+            for (i in 1..charsToAnimate) {
+                val partialText = fullText.take(i)
+                displayedText = partialText
+
+                // Calculate progress (0.0f to 1.0f)
+                val progress = i.toFloat() / charsToAnimate.toFloat()
+                onAnimationProgress(progress)
+
+                // Typing speed based on message length
+                val delay = when {
+                    fullText.length > 500 -> 5L
+                    fullText.length > 200 -> 8L
+                    else -> 12L
+                }
+                delay(delay)
+            }
+
+            // Final progress update
+            onAnimationProgress(1.0f)
+        } else {
+            // For user messages, just display immediately
+            displayedText = message.content ?: ""
+            onAnimationProgress(1.0f)
+        }
+    }
+
+    // Rest of your existing message rendering code...
+    val messageColor = when (message.role) {
+        MessageRole.USER -> MatrixThemeColors.userMessageBg
+        MessageRole.ASSISTANT -> MatrixThemeColors.assistantMessageBg
+        else -> MatrixThemeColors.surface
+    }
+
+    val textColor = when (message.role) {
+        MessageRole.USER -> MatrixThemeColors.userMessageText
+        MessageRole.ASSISTANT -> MatrixThemeColors.assistantMessageText
+        else -> MatrixThemeColors.highlightColor.copy(alpha = 0.7f)
+    }
+
+    // Is the message still typing?
+    val isTyping = message.role == MessageRole.ASSISTANT &&
+            message.content != null &&
+            displayedText.length < message.content.length
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 8.dp,
+                        topEnd = 8.dp,
+                        bottomStart = if (message.role == MessageRole.USER) 8.dp else 2.dp,
+                        bottomEnd = if (message.role == MessageRole.USER) 2.dp else 8.dp
+                    )
+                )
+                .background(messageColor)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onLongPress = {
+                            clipboardManager.setText(AnnotatedString(message.content.orEmpty()))
+                            onCopyToClipboard()
+                        }
+                    )
+                }
+                .padding(top = 12.dp, bottom = 12.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1203,7 +1273,6 @@ fun AnimatedChatMessage(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Copy button inside the message box
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center
@@ -1226,17 +1295,7 @@ fun AnimatedChatMessage(
             }
         }
 
-        // Add some spacing between messages
         Spacer(modifier = Modifier.height(8.dp))
     }
 }
 
-// Add this function to measure text width
-@Composable
-private fun measureText(text: String, style: TextStyle): TextLayoutResult {
-    val textMeasurer = rememberTextMeasurer()
-    return textMeasurer.measure(
-        text = AnnotatedString(text),
-        style = style
-    )
-}
