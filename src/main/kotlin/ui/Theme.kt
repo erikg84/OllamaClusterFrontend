@@ -5,6 +5,28 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
+object MatrixThemeColors {
+    val background = Color(0xFF000000) // Pure black
+    val surface = Color(0xFF0D0D0D) // Nearly black
+    val cardBackground = Color(0xFF121212) // Slightly lighter than surface for cards
+    val userMessageBg = Color(0xFF003B00) // Dark green
+    val assistantMessageBg = Color(0xFF0F2318) // Darker green
+    val userMessageText = Color(0xFF00FF00) // Bright matrix green
+    val assistantMessageText = Color(0xFF4DFF4D) // Lighter matrix green
+    val inputFieldBg = Color(0xFF0A1A0A) // Very dark green
+    val buttonColor = Color(0xFF008F11) // Matrix code green
+    val highlightColor = Color(0xFF00FF41) // Matrix highlight green
+    val accentColor = Color(0xFF003B00) // Dark green accent
+    val statusText = Color(0xFF4DFF4D) // Light green for status text
+    val chartLine = Color(0xFF00FF41) // Bright green for charts
+    val sectionHeader = Color(0xFF00FF41) // Bright green for section headers
+    val separatorLine = Color(0xFF003B00) // Dark green for separators
+    val errorColor = Color(0xFFFF5252) // Red for errors
+    val infoColor = Color(0xFF4DFF4D) // Green for info
+    val warningColor = Color(0xFFFFD740) // Yellow for warnings
+    val debugColor = Color(0xFF40C4FF) // Blue for debug
+}
+
 // Light theme colors
 private val LightColorScheme = lightColorScheme(
     primary = Color(0xFF2B4162),
