@@ -1,9 +1,11 @@
 package data.service
 
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import domain.model.*
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
+import io.ktor.client.request.forms.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.flow.*
@@ -45,6 +47,7 @@ class LLMApiServiceImpl(private val httpClient: HttpClient) : LLMApiService {
         // LLM operations
         const val CHAT = "api/chat"
         const val GENERATE = "api/generate"
+        const val VISION = "api/vision"
 
         // Admin monitoring
         const val METRICS = "admin/metrics"
@@ -439,21 +442,87 @@ class LLMApiServiceImpl(private val httpClient: HttpClient) : LLMApiService {
     }
 
     override suspend fun getLogs(level: LogLevel?): List<LogEntry> {
-        try {
-            val response: HttpResponse = httpClient.get(Endpoints.LOGS) {
-                if (level != null) {
-                    parameter("level", level.toString().lowercase())
+        return emptyList()
+//        try {
+//            val response: HttpResponse = httpClient.get(Endpoints.LOGS) {
+//                if (level != null) {
+//                    parameter("level", level.toString().lowercase())
+//                }
+//            }
+//
+//            if (response.status.isSuccess()) {
+//                return response.body()
+//            } else {
+//                logger.error { "Error fetching logs: ${response.status}" }
+//                throw Exception("Failed to fetch logs: ${response.status}")
+//            }
+//        } catch (e: Exception) {
+//            logger.error(e) { "Error fetching logs" }
+//            throw e
+//        }
+    }
+
+    override suspend fun sendVisionRequest(request: VisionRequest): VisionResponse {
+        return try {
+            val response = httpClient.submitFormWithBinaryData(
+                url = Endpoints.VISION,
+                formData = formData {
+                    append("model", request.model)
+                    append("prompt", request.prompt)
+                    append("node", request.node)
+                    append(
+                        key = "image",
+                        value = request.imageFile.readBytes(),
+                        headers = Headers.build {
+                            append(HttpHeaders.ContentDisposition, "filename=\"${request.imageFile.name}\"")
+                            append(HttpHeaders.ContentType, "image/png")
+                        }
+                    )
                 }
-            }
+            )
 
             if (response.status.isSuccess()) {
-                return response.body()
+                val rawBody = response.bodyAsText()
+
+                // Remove the surrounding quotes and unescape the JSON string
+                val cleanedBody = rawBody
+                    .trim('"')
+                    .replace("\\\"", "\"")
+                    .replace("\n", "")
+
+                val mapper = jacksonObjectMapper()
+                val chunks = cleanedBody
+                    .split("}{")
+                    .map {
+                        // Add back the braces if they were stripped
+                        val jsonChunk = if (!it.startsWith("{")) "{$it" else
+                            if (!it.endsWith("}")) "$it}" else it
+
+                        try {
+                            mapper.readValue(jsonChunk, VisionChunk::class.java)
+                        } catch (e: Exception) {
+                            logger.warn(e) { "Failed to parse vision chunk:\n$jsonChunk" }
+                            null
+                        }
+                    }
+                    .filterNotNull()
+                    .sortedBy { it.createdAt }
+
+                // Combine the content of chunks
+                val fullContent = chunks
+                    .filter { it.message.role == "assistant" }
+                    .joinToString("") { it.message.content }
+
+                VisionResponse(
+                    chunks = chunks,
+                    content = fullContent
+                )
+
             } else {
-                logger.error { "Error fetching logs: ${response.status}" }
-                throw Exception("Failed to fetch logs: ${response.status}")
+                throw Exception("Vision request failed with ${response.status}")
             }
         } catch (e: Exception) {
-            logger.error(e) { "Error fetching logs" }
+            logger.error(e) { "Vision request failed" }
             throw e
         }
     }

@@ -3,6 +3,7 @@ package domain.model
 import com.fasterxml.jackson.annotation.*
 import io.ktor.client.call.*
 import io.ktor.client.statement.*
+import java.io.File
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class Node(
@@ -502,4 +503,53 @@ data class ModelPerf(
 data class TimePoint(
     val time: String = "",
     val value: Double = 0.0
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class VisionRequest(
+    val model: String,
+    val prompt: String,
+    val node: String,
+    val imageFile: File
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class UsageMetrics(
+    @JsonProperty("prompt_tokens")
+    val promptTokens: Int? = null,
+    @JsonProperty("completion_tokens")
+    val completionTokens: Int? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class VisionResponse(
+    val chunks: List<VisionChunk> = emptyList(),
+    val content: String = ""
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class VisionChunk(
+    @JsonProperty("model")
+    val model: String,
+
+    @JsonProperty("created_at")
+    val createdAt: String,
+
+    @JsonProperty("message")
+    val message: VisionMessage,
+
+    @JsonProperty("done")
+    val done: Boolean,
+
+    @JsonProperty("done_reason")
+    val doneReason: String? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class VisionMessage(
+    @JsonProperty("role")
+    val role: String,
+
+    @JsonProperty("content")
+    val content: String
 )

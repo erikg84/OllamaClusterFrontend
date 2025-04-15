@@ -73,6 +73,12 @@ interface LLMInteractionRepository {
         query: String,
         preferredModel: String? = null
     ): MAESTROResult
+
+    /**
+     * Send a vision request with an image file to a model
+     */
+    suspend fun sendVisionRequest(request: VisionRequest): VisionResponse
+
 }
 
 private val logger = KotlinLogging.logger {}
@@ -81,6 +87,19 @@ private val logger = KotlinLogging.logger {}
  * Implementation of LLMInteractionRepository that uses LLMApiService to interact with models
  */
 class LLMInteractionRepositoryImpl(private val apiService: LLMApiService) : LLMInteractionRepository {
+
+    override suspend fun sendVisionRequest(request: VisionRequest): VisionResponse {
+        logger.debug { "Sending vision request to node: ${request.node}, model: ${request.model}" }
+        return try {
+            val response = apiService.sendVisionRequest(request)
+            logger.debug { "Received vision response from model: ${request.model}" }
+            response
+        } catch (e: Exception) {
+            logger.error(e) { "Error during vision request to node: ${request.node}, model: ${request.model}" }
+            throw e
+        }
+    }
+
 
     override suspend fun chat(request: ChatRequest): ChatResponse {
         logger.debug { "Sending chat request to node: ${request.node}, model: ${request.model}" }

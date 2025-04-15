@@ -73,4 +73,7 @@ interface LLMApiService {
     suspend fun getClusterLogs(level: LogLevel? = null): List<LogEntry>
     suspend fun resetClusterStats(): Boolean
     suspend fun getClusterMetrics(): ClusterMetrics
+
+    // Vision
+    suspend fun sendVisionRequest(request: VisionRequest): VisionResponse
 }

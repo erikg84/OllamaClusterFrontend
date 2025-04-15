@@ -10,6 +10,7 @@ import repository.ClusterRepository
 import repository.NodeRepository
 import repository.QueueRepository
 import usecase.*
+import java.io.File
 
 private val logger = KotlinLogging.logger {}
 
@@ -24,7 +25,8 @@ class InteractViewModel(
     private val clusterRepository: ClusterRepository,
     private val adminRepository: AdminRepository,
     private val queueRepository: QueueRepository,
-    private val nodeRepository: NodeRepository
+    private val nodeRepository: NodeRepository,
+    private val sendVisionRequestUseCase: SendVisionRequestUseCase
 ) : BaseViewModel() {
 
     // Available nodes and models
@@ -123,6 +125,12 @@ class InteractViewModel(
     private val _scrollToLatestEvent = MutableSharedFlow<Unit>()
     val scrollToLatestEvent = _scrollToLatestEvent.asSharedFlow()
 
+    private val _visionResult = MutableStateFlow("")
+    val visionResult: StateFlow<String> = _visionResult.asStateFlow()
+
+    private var file: File? = null
+
+
     // Timer for auto-refresh
     private var monitoringJob: Job? = null
     private val monitoringInterval = 5000L
@@ -166,6 +174,43 @@ class InteractViewModel(
             }
         }
     }
+
+    fun sendVisionRequest(content: String) {
+        if (file == null) return
+        val userMessage = ChatMessage(
+            role = MessageRole.USER,
+            content = content
+        )
+        chatMessages.add(userMessage)
+
+        val modelId = _selectedModel.value?.id
+        val nodeId = _selectedNode.value?.id
+
+        if (modelId.isNullOrBlank() || nodeId.isNullOrBlank()) {
+            setStatusMessage("Please select a model and node before making a vision request.")
+            return
+        }
+
+        launchWithLoading {
+            try {
+                _isGenerating.value = true
+                val result = sendVisionRequestUseCase(VisionRequest(modelId, content, nodeId, file!!))
+                _visionResult.value = result.content
+                setStatusMessage("Vision request completed")
+                file = null
+            } catch (e: Exception) {
+                handleError(e)
+                setStatusMessage("Vision request failed: ${e.message}")
+            } finally {
+                _isGenerating.value = false
+            }
+        }
+    }
+
+    fun saveFile(file: File) {
+        this.file = file
+    }
+
 
     /**
      * Select a node
@@ -232,6 +277,11 @@ class InteractViewModel(
      */
     fun addUserMessage(content: String) {
         if (content.isBlank()) return
+
+        if (file != null) {
+            sendVisionRequest(content)
+            return
+        }
 
         val userMessage = ChatMessage(
             role = MessageRole.USER,

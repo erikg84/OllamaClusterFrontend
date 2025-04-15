@@ -1,5 +1,6 @@
 package ui.chatbot
 
+import FileUploadDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -11,6 +12,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.awt.ComposeWindow
+import androidx.compose.ui.window.FrameWindowScope
 import domain.model.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -19,7 +22,7 @@ import ui.MatrixThemeColors
 import viewmodel.InteractViewModel
 
 @Composable
-fun ChatScreen(viewModel: InteractViewModel) {
+fun ChatScreen(viewModel: InteractViewModel, composeWindow: ComposeWindow) {
 
     val chatMessages = viewModel.chatMessages
     val isGenerating by viewModel.isGenerating.collectAsState()
@@ -36,6 +39,7 @@ fun ChatScreen(viewModel: InteractViewModel) {
     val gpuUsage by viewModel.gpuUsage.collectAsState()
     val messageAnimationStates = remember { mutableStateMapOf<String, Boolean>() }
     val isAnyMessageAnimating = messageAnimationStates.values.any { !it }
+    var showFileUploadDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(isAnyMessageAnimating) {
         if (isAnyMessageAnimating && chatMessages.isNotEmpty()) {
@@ -209,7 +213,10 @@ fun ChatScreen(viewModel: InteractViewModel) {
                                 scrollState.animateScrollToItem(chatMessages.size)
                             }
                         },
-                        isGenerating = isGenerating
+                        isGenerating = isGenerating,
+                        onPlusButtonClicked = {
+                            showFileUploadDialog = true
+                        },
                     )
                 }
             }
@@ -236,6 +243,26 @@ fun ChatScreen(viewModel: InteractViewModel) {
                     )
                 }
             }
+        }
+
+        if (showFileUploadDialog) {
+            FileUploadDialog(
+                composeWindow = composeWindow,
+                isVisible = showFileUploadDialog,
+                onDismiss = { showFileUploadDialog = false },
+                onFilesSelected = { files ->
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar(
+                            "Uploaded ${files.size} files",
+                            withDismissAction = true
+                        )
+                    }
+
+                    if (files.isNotEmpty()) {
+                        viewModel.saveFile(files.first())
+                    }
+                }
+            )
         }
 
         SnackbarHost(

@@ -2,9 +2,11 @@ package ui.chatbot
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
@@ -12,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.*
@@ -30,7 +33,8 @@ fun ImprovedChatInputArea(
     onMessageSent: (String) -> Unit,
     isGenerating: Boolean,
     streamingEnabled: Boolean = true,
-    onStreamingToggled: () -> Unit = {}
+    onStreamingToggled: () -> Unit = {},
+    onPlusButtonClicked: () -> Unit = {}
 ) {
     var messageText by remember { mutableStateOf("") }
     val clipboardManager = LocalClipboardManager.current
@@ -87,6 +91,25 @@ fun ImprovedChatInputArea(
                 .padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            IconButton(
+                onClick = onPlusButtonClicked,
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .padding(4.dp),
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = MatrixThemeColors.buttonColor,
+                    contentColor = MatrixThemeColors.highlightColor
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add attachment or action",
+                    tint = MatrixThemeColors.highlightColor
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
             // Text input field with Matrix theme styling
             Box(
                 modifier = Modifier

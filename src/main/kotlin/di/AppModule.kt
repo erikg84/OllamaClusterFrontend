@@ -28,6 +28,7 @@ val networkModule = module {
             install(ContentNegotiation) {
                 jackson {
                     registerModule(KotlinModule.Builder().build())
+                    enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT)
                 }
             }
             engine {
@@ -48,7 +49,7 @@ val networkModule = module {
                 level = LogLevel.BODY
             }
             defaultRequest {
-                url("http://192.168.68.143:3001/")
+                url("http://192.168.68.135:3001/")
             }
         }
     }
@@ -94,11 +95,12 @@ val useCaseModule = module {
     // LLM Interaction use cases
     factoryOf(::ChatWithLLMUseCaseImpl) bind ChatWithLLMUseCase::class
     factoryOf(::GenerateTextUseCaseImpl) bind GenerateTextUseCase::class
+    factoryOf(::SendVisionRequestUseCaseImpl) bind SendVisionRequestUseCase::class
 }
 
 val viewModelModule = module {
     factory { DashboardViewModel(get(), get(), get(), get(), get(), get()) }
-    factory { InteractViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
+    factory { InteractViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { MetricsViewModel(get(), get(), get()) }
     factory { AdminViewModel(get(), get(), get()) }
 }
