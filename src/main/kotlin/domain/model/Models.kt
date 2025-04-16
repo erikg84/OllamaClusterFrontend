@@ -478,6 +478,24 @@ data class ClusterMetrics(
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+data class VisionModelResponse(
+    val status: String,
+    val message: String,
+    val data: List<VisionModel>
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class VisionModel(
+    val id: String,
+    val name: String,
+    val type: String,
+    val size: Long,
+    val quantization: String,
+    val status: String,
+    val node: String
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class NodeMetrics(
     val requestCounts: Map<String, Long>,
     val nodePerformance: Map<String, NodePerf>,
@@ -523,8 +541,17 @@ data class UsageMetrics(
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class VisionResponse(
-    val chunks: List<VisionChunk> = emptyList(),
-    val content: String = ""
+    val model: String = "",
+    val created_at: String = "",
+    val message: MessageContent? = null,
+    val done: Boolean = false,
+    val done_reason: String? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class MessageContent(
+    val role: String,
+    val content: String
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)

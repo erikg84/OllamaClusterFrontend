@@ -57,6 +57,7 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind:2.15.2")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2")
     implementation("io.ktor:ktor-serialization-jackson:$ktor_version")
+    implementation("org.json:json:20240205")
 
     // Settings/preferences storage
     implementation("com.russhwolf:multiplatform-settings:1.1.0")

@@ -2,6 +2,7 @@ package usecase
 
 import domain.model.VisionRequest
 import domain.model.VisionResponse
+import kotlinx.coroutines.flow.Flow
 import mu.KotlinLogging
 import repository.LLMInteractionRepository
 

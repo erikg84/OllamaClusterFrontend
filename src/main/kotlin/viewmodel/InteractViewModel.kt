@@ -195,7 +195,7 @@ class InteractViewModel(
             try {
                 _isGenerating.value = true
                 val result = sendVisionRequestUseCase(VisionRequest(modelId, content, nodeId, file!!))
-                _visionResult.value = result.content
+                _visionResult.value = result.message?.content.orEmpty()
                 setStatusMessage("Vision request completed")
                 file = null
             } catch (e: Exception) {
