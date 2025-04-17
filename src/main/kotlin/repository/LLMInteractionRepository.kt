@@ -89,13 +89,10 @@ private val logger = KotlinLogging.logger {}
 class LLMInteractionRepositoryImpl(private val apiService: LLMApiService) : LLMInteractionRepository {
 
     override suspend fun sendVisionRequest(request: VisionRequest): VisionResponse {
-        logger.debug { "Sending vision request to node: ${request.node}, model: ${request.model}" }
         return try {
             val response = apiService.sendVisionRequest(request)
-            logger.debug { "Received vision response from model: ${request.model}" }
             response
         } catch (e: Exception) {
-            logger.error(e) { "Error during vision request to node: ${request.node}, model: ${request.model}" }
             throw e
         }
     }

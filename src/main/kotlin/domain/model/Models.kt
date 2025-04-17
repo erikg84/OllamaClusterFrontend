@@ -525,58 +525,28 @@ data class TimePoint(
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class VisionRequest(
-    val model: String,
-    val prompt: String,
-    val node: String,
-    val imageFile: File
-)
-
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class UsageMetrics(
-    @JsonProperty("prompt_tokens")
-    val promptTokens: Int? = null,
-    @JsonProperty("completion_tokens")
-    val completionTokens: Int? = null
+    val image: File,
+    val prompt: String
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class VisionResponse(
+    val status: String = "",
+    val message: String = "",
+    val data: VisionResponseData? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class VisionResponseData(
     val model: String = "",
-    val created_at: String = "",
-    val message: MessageContent? = null,
-    val done: Boolean = false,
-    val done_reason: String? = null
+    val node: String = "",
+    val content: String = "",
+    val metrics: VisionMetrics? = null
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class MessageContent(
-    val role: String,
-    val content: String
-)
-
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class VisionChunk(
-    @JsonProperty("model")
-    val model: String,
-
-    @JsonProperty("created_at")
-    val createdAt: String,
-
-    @JsonProperty("message")
-    val message: VisionMessage,
-
-    @JsonProperty("done")
-    val done: Boolean,
-
-    @JsonProperty("done_reason")
-    val doneReason: String? = null
-)
-
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class VisionMessage(
-    @JsonProperty("role")
-    val role: String,
-
-    @JsonProperty("content")
-    val content: String
+data class VisionMetrics(
+    val total_duration_ms: Long = 0,
+    val prompt_eval_count: Int = 0,
+    val completion_token_count: Int = 0
 )

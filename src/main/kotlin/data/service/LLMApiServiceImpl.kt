@@ -4,23 +4,14 @@ import domain.model.*
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
+import io.ktor.client.request.forms.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import mu.KotlinLogging
-import org.json.JSONException
-import org.json.JSONObject
 import util.asLineFlow
-import java.io.BufferedReader
-import java.io.File
-import java.io.FileWriter
-import java.io.InputStreamReader
-import java.net.HttpURLConnection
-import java.net.URL
-import java.nio.charset.StandardCharsets
-import java.util.UUID
 
 private val logger = KotlinLogging.logger {}
 
@@ -55,6 +46,7 @@ class LLMApiServiceImpl(private val httpClient: HttpClient) : LLMApiService {
         // LLM operations
         const val CHAT = "api/chat"
         const val GENERATE = "api/generate"
+        const val VISION = "api/vision"
         const val VISION_MODELS = "api/vision-models"
 
         // Admin monitoring
@@ -451,76 +443,32 @@ class LLMApiServiceImpl(private val httpClient: HttpClient) : LLMApiService {
 
     override suspend fun getLogs(level: LogLevel?): List<LogEntry> {
         return emptyList()
-//        try {
-//            val response: HttpResponse = httpClient.get(Endpoints.LOGS) {
-//                if (level != null) {
-//                    parameter("level", level.toString().lowercase())
-//                }
-//            }
-//
-//            if (response.status.isSuccess()) {
-//                return response.body()
-//            } else {
-//                logger.error { "Error fetching logs: ${response.status}" }
-//                throw Exception("Failed to fetch logs: ${response.status}")
-//            }
-//        } catch (e: Exception) {
-//            logger.error(e) { "Error fetching logs" }
-//            throw e
-//        }
     }
 
     override suspend fun sendVisionRequest(request: VisionRequest): VisionResponse {
         return try {
-//            val visionModels = getVisionModels()
-//            val model = findHighestModelForPreferredMac(visionModels) ?: return VisionResponse()
-//            val imageRequest = ImageAnalyzer(
-//                model = model.id,
-//                prompt = request.prompt,
-//                node = model.node
-//            )
-            val imageRequest = ImageAnalyzer()
-            val result = imageRequest.analyzeImage(request.imageFile)
-            VisionResponse(
-                message = MessageContent(role = "User", content = result.orEmpty())
-            )
+            val response: HttpResponse = httpClient.post(Endpoints.VISION) {
+                setBody(
+                    MultiPartFormDataContent(
+                    formData {
+                        append("image", request.image.readBytes(), Headers.build {
+                            append(HttpHeaders.ContentDisposition, "filename=${request.image.name}")
+                            append(HttpHeaders.ContentType, ContentType.Image.Any.toString())
+                        })
+                        append("prompt", request.prompt)
+                    }
+                ))
+            }
+
+            if (response.status.isSuccess()) {
+                response.body()
+            } else {
+                logger.error { "Error in vision request: ${response.status}" }
+                VisionResponse(status = "error", message = "Failed with status: ${response.status}")
+            }
         } catch (e: Exception) {
             logger.error(e) { "Vision request failed" }
-            throw e
-        }
-    }
-
-    private fun findHighestModelForPreferredMac(visionMOdels: List<VisionModel>): VisionModel? {
-        val preferredNodes = listOf("MAC_STUDIO", "MAC_MINI", "MACBOOK_PRO")
-
-        for (node in preferredNodes) {
-            val candidates = visionMOdels
-                .filter { it.node.equals(node, ignoreCase = true) }
-                .sortedByDescending { it.size }
-
-            if (candidates.isNotEmpty()) {
-                return candidates.first()
-            }
-        }
-
-        return null // No preferred nodes found
-    }
-
-
-    private suspend fun getVisionModels(): List<VisionModel> {
-        try {
-            val response: HttpResponse = httpClient.get(Endpoints.VISION_MODELS)
-
-            val result = response.handleApiResponse<List<VisionModel>>()
-            if (result != null) {
-                return result
-            } else {
-                logger.error { "Error getting vision models: empty or invalid response" }
-                throw Exception("Failed to get vision models: empty or invalid response")
-            }
-        } catch (e: Exception) {
-            logger.error(e) { "Error getting cluster metrics" }
-            throw e
+            VisionResponse(status = "error", message = "Request failed: ${e.message}")
         }
     }
 
@@ -1044,173 +992,5 @@ class LLMApiServiceImpl(private val httpClient: HttpClient) : LLMApiService {
             }
         }
         return null
-    }
-}
-
-class ImageAnalyzer(
-    private val apiUrl: String = "http://192.168.68.135:3001/api/vision",
-    private val model: String = "llava:13b",
-    private val prompt: String = "Describe what you see in this image",
-    private val node: String = "local"
-) {
-    companion object {
-        // Boundary for multipart form data
-        private val BOUNDARY = UUID.randomUUID().toString()
-
-        @JvmStatic
-        fun main(args: Array<String>) {
-            try {
-                // Create an instance with default parameters
-                val analyzer = ImageAnalyzer()
-
-                // Example: Analyze an image file
-                val imageFile = File("C:\\Users\\erikg\\Downloads\\Screenshot 2025-04-09 213246.png")
-                val result = analyzer.analyzeImage(imageFile)
-
-                println("\n\nFull cleaned response collected:")
-                println(result)
-
-                // Save result to file
-                FileWriter("cleaned_response.txt").use { fileWriter ->
-                    fileWriter.write(result ?: "Failed to process response")
-                }
-                println("Saved to cleaned_response.txt")
-
-            } catch (e: Exception) {
-                System.err.println("Error: ${e.message}")
-                e.printStackTrace()
-            }
-        }
-    }
-
-    /**
-     * Analyzes an image file using the vision API
-     * @param imageFile The file to analyze
-     * @return The cleaned response text, or null if processing failed
-     */
-    fun analyzeImage(imageFile: File): String? {
-        println("Sending request to $apiUrl with image ${imageFile.absolutePath}")
-
-        // Create connection
-        val connection = URL(apiUrl).openConnection() as HttpURLConnection
-        connection.requestMethod = "POST"
-        connection.doOutput = true
-        connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=$BOUNDARY")
-
-        // Prepare request body
-        connection.outputStream.use { outputStream ->
-            // Add form fields
-            writeFormField(outputStream, "model", model)
-            writeFormField(outputStream, "prompt", prompt)
-            writeFormField(outputStream, "node", node)
-
-            // Add image file
-            writeFileField(outputStream, "image", imageFile)
-
-            // End of multipart form data
-            outputStream.write("--$BOUNDARY--\r\n".toByteArray(StandardCharsets.UTF_8))
-        }
-
-        // Process response
-        val responseCode = connection.responseCode
-        if (responseCode == HttpURLConnection.HTTP_OK) {
-            BufferedReader(InputStreamReader(connection.inputStream, StandardCharsets.UTF_8)).use { reader ->
-                val rawLines = mutableListOf<String>()
-                var line: String?
-
-                while (reader.readLine().also { line = it } != null) {
-                    if (!line.isNullOrBlank()) {
-                        rawLines.add(line!!)
-                        println("Raw response line: $line")
-                    }
-                }
-
-                val rawContent = rawLines.joinToString("\n")
-                return cleanLLaVaResponseFromString(rawContent)
-            }
-        } else {
-            System.err.println("HTTP Error: $responseCode")
-            BufferedReader(InputStreamReader(connection.errorStream, StandardCharsets.UTF_8)).use { reader ->
-                var line: String?
-                while (reader.readLine().also { line = it } != null) {
-                    System.err.println(line)
-                }
-            }
-            return null
-        }
-    }
-
-    private fun writeFormField(outputStream: java.io.OutputStream, fieldName: String, fieldValue: String) {
-        outputStream.write("--$BOUNDARY\r\n".toByteArray(StandardCharsets.UTF_8))
-        outputStream.write("Content-Disposition: form-data; name=\"$fieldName\"\r\n\r\n".toByteArray(StandardCharsets.UTF_8))
-        outputStream.write("$fieldValue\r\n".toByteArray(StandardCharsets.UTF_8))
-    }
-
-    /**
-     * Writes a file field to the multipart form data request
-     * @param outputStream The output stream to write to
-     * @param fieldName The name of the form field
-     * @param file The file to include in the request
-     */
-    private fun writeFileField(outputStream: java.io.OutputStream, fieldName: String, file: File) {
-        outputStream.write("--$BOUNDARY\r\n".toByteArray(StandardCharsets.UTF_8))
-        outputStream.write("Content-Disposition: form-data; name=\"$fieldName\"; filename=\"${file.name}\"\r\n".toByteArray(StandardCharsets.UTF_8))
-
-        val contentType = try {
-            java.nio.file.Files.probeContentType(file.toPath())
-        } catch (e: Exception) {
-            "application/octet-stream"
-        }
-
-        outputStream.write("Content-Type: $contentType\r\n\r\n".toByteArray(StandardCharsets.UTF_8))
-
-        file.inputStream().use { input ->
-            input.copyTo(outputStream)
-        }
-
-        outputStream.write("\r\n".toByteArray(StandardCharsets.UTF_8))
-    }
-
-    private fun cleanLLaVaResponseFromString(rawContent: String): String? {
-        return try {
-            var content = rawContent
-
-            // Remove surrounding quotes if present
-            if (content.startsWith("\"") && content.endsWith("\"")) {
-                content = content.substring(1, content.length - 1)
-            }
-
-            // Unescape the JSON string
-            content = content.replace("\\\"", "\"")
-            content = content.replace("\\n", "\n")
-            content = content.replace("\\\\", "\\")
-
-            // Split by newlines to get individual JSON objects
-            val jsonLines = content.split("\n")
-            val fullResponse = StringBuilder()
-
-            // Process each line
-            for (line in jsonLines) {
-                if (line.isBlank()) continue
-
-                try {
-                    val jsonObj = JSONObject(line)
-                    if (jsonObj.has("message")) {
-                        val message = jsonObj.getJSONObject("message")
-                        if ("assistant" == message.getString("role") && message.has("content")) {
-                            fullResponse.append(message.getString("content"))
-                        }
-                    }
-                } catch (e: JSONException) {
-                    System.err.println("Error parsing line: ${if (line.length > 50) line.substring(0, 50) + "..." else line}")
-                    System.err.println("Error: ${e.message}")
-                }
-            }
-
-            fullResponse.toString()
-        } catch (e: Exception) {
-            System.err.println("Error processing raw string: ${e.message}")
-            null
-        }
     }
 }
