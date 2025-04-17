@@ -177,25 +177,36 @@ class InteractViewModel(
 
     fun sendVisionRequest(content: String) {
         if (file == null) return
+
         val userMessage = ChatMessage(
             role = MessageRole.USER,
             content = content
         )
         chatMessages.add(userMessage)
 
-        val modelId = _selectedModel.value?.id
-        val nodeId = _selectedNode.value?.id
-
-        if (modelId.isNullOrBlank() || nodeId.isNullOrBlank()) {
-            setStatusMessage("Please select a model and node before making a vision request.")
-            return
-        }
-
         launchWithLoading {
             try {
                 _isGenerating.value = true
                 val result = sendVisionRequestUseCase(VisionRequest(file!!, content))
-                _visionResult.value = result.data?.content.orEmpty()
+
+                // Add AI response to chat messages
+                if (result.status == "ok" && result.data != null) {
+                    val assistantMessage = ChatMessage(
+                        role = MessageRole.ASSISTANT,
+                        content = result.data.content
+                    )
+                    chatMessages.add(assistantMessage)
+                    scrollToLatestMessage()
+                } else {
+                    // Handle error case
+                    val errorMessage = ChatMessage(
+                        role = MessageRole.ASSISTANT,
+                        content = "Error analyzing image: ${result.message}"
+                    )
+                    chatMessages.add(errorMessage)
+                    scrollToLatestMessage()
+                }
+
                 setStatusMessage("Vision request completed")
                 file = null
             } catch (e: Exception) {
